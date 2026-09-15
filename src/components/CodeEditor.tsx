@@ -13,7 +13,14 @@ import {
   FileCode, 
   Binary,
   Settings,
-  X
+  X,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUp,
+  ChevronsDown,
+  CopyPlus,
+  Hash,
+  Globe
 } from 'lucide-react';
 
 interface CodeEditorProps {
@@ -22,6 +29,7 @@ interface CodeEditorProps {
   onRun: () => void;
   onAskAi: (selectedCode?: string) => void;
   settings?: EditorSettings;
+  onOpenLanguagesHub?: () => void;
 }
 
 const DEFAULT_SETTINGS: EditorSettings = {
@@ -87,6 +95,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onRun,
   onAskAi,
   settings = DEFAULT_SETTINGS,
+  onOpenLanguagesHub,
 }) => {
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1, offset: 0 });
   const [copied, setCopied] = useState(false);
@@ -95,6 +104,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const [replaceQuery, setReplaceQuery] = useState('');
   const [matchCount, setMatchCount] = useState(0);
 
+  // Jump to Line Popover State
+  const [showGoToLine, setShowGoToLine] = useState(false);
+  const [targetLineInput, setTargetLineInput] = useState('');
+
   // IntelliSense State
   const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
   const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(0);
@@ -102,8 +115,52 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const syntaxOverlayRef = useRef<HTMLDivElement>(null);
+  const lineNumbersRef = useRef<HTMLDivElement>(null);
 
   const lines = file.content.split('\n');
+
+  // Exact Typography & Geometry Metrics for Pixel-Perfect Textarea/Overlay Alignment
+  const fontSize = settings.fontSize || 14;
+  const lineHeightPx = Math.round(fontSize * 1.57); // e.g. 14px -> 22px exact height
+  const editorFontFamily = "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace";
+  const paddingY = 12; // 12px top and bottom
+  const paddingX = 14; // 14px left and right
+
+  const sharedEditorStyles: React.CSSProperties = {
+    fontFamily: editorFontFamily,
+    fontSize: `${fontSize}px`,
+    lineHeight: `${lineHeightPx}px`,
+    tabSize: settings.tabSize,
+    MozTabSize: settings.tabSize,
+    fontVariantLigatures: 'none',
+    fontFeatureSettings: '"liga" 0, "calt" 0',
+    letterSpacing: '0px',
+    wordSpacing: '0px',
+    whiteSpace: settings.wordWrap ? 'pre-wrap' : 'pre',
+    wordBreak: settings.wordWrap ? 'break-all' : 'normal',
+    overflowWrap: settings.wordWrap ? 'break-word' : 'normal',
+    boxSizing: 'border-box',
+    paddingTop: `${paddingY}px`,
+    paddingBottom: `${paddingY}px`,
+    paddingLeft: `${paddingX}px`,
+    paddingRight: `${paddingX}px`,
+    margin: 0,
+    border: 0,
+    outline: 'none',
+  };
+
+  // Synchronize Scroll between Textarea, Syntax Overlay, and Line Numbers
+  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    const { scrollTop, scrollLeft } = e.currentTarget;
+    if (syntaxOverlayRef.current) {
+      syntaxOverlayRef.current.scrollTop = scrollTop;
+      syntaxOverlayRef.current.scrollLeft = scrollLeft;
+    }
+    if (lineNumbersRef.current) {
+      lineNumbersRef.current.scrollTop = scrollTop;
+    }
+  };
 
   // Track cursor position
   const updateCursorPosition = useCallback(() => {
@@ -128,16 +185,160 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       if (matched.length > 0) {
         setSuggestions(matched);
         setSelectedSuggestionIdx(0);
-        // Calculate approximate top/left based on line & col
-        const top = Math.min(currentLine * 20 + 28, 400);
-        const left = Math.min(currentCol * 8 + 48, 500);
+        // Calculate top/left based on exact line height & col offset
+        const top = Math.min((currentLine - 1) * lineHeightPx + paddingY + lineHeightPx + 4, 380);
+        const left = Math.min(Math.round((currentCol - 1) * (fontSize * 0.6)) + paddingX, 480);
         setSuggestionPos({ top, left });
         return;
       }
     }
     setSuggestions([]);
     setSuggestionPos(null);
-  }, [file.language]);
+  }, [file.language, fontSize, lineHeightPx, paddingX, paddingY]);
+
+  // --- Code Line Up / Down & Navigation Utilities ---
+
+  // Move Current Line or Multi-line Block UP
+  const handleMoveLineUp = () => {
+    if (!textareaRef.current) return;
+    const ta = textareaRef.current;
+    const { selectionStart, selectionEnd, value } = ta;
+    const linesArr = value.split('\n');
+    
+    // Calculate start and end line indices
+    const startLineIdx = value.substring(0, selectionStart).split('\n').length - 1;
+    const endLineIdx = value.substring(0, selectionEnd).split('\n').length - 1;
+
+    if (startLineIdx === 0) return; // Already at top
+
+    if (startLineIdx === endLineIdx) {
+      // Single line move up
+      const temp = linesArr[startLineIdx];
+      linesArr[startLineIdx] = linesArr[startLineIdx - 1];
+      linesArr[startLineIdx - 1] = temp;
+      const newContent = linesArr.join('\n');
+      onChangeContent(newContent);
+
+      setTimeout(() => {
+        if (textareaRef.current) {
+          const newPos = linesArr.slice(0, startLineIdx - 1).join('\n').length + (startLineIdx - 1 > 0 ? 1 : 0) + (selectionStart - (linesArr.slice(0, startLineIdx).join('\n').length + 1));
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(Math.max(0, newPos), Math.max(0, newPos));
+          updateCursorPosition();
+        }
+      }, 0);
+    } else {
+      // Multi-line block move up
+      const targetPrevLine = linesArr[startLineIdx - 1];
+      const selectedBlock = linesArr.slice(startLineIdx, endLineIdx + 1);
+      linesArr.splice(startLineIdx - 1, (endLineIdx - startLineIdx + 2), ...selectedBlock, targetPrevLine);
+      onChangeContent(linesArr.join('\n'));
+    }
+  };
+
+  // Move Current Line or Multi-line Block DOWN
+  const handleMoveLineDown = () => {
+    if (!textareaRef.current) return;
+    const ta = textareaRef.current;
+    const { selectionStart, selectionEnd, value } = ta;
+    const linesArr = value.split('\n');
+
+    const startLineIdx = value.substring(0, selectionStart).split('\n').length - 1;
+    const endLineIdx = value.substring(0, selectionEnd).split('\n').length - 1;
+
+    if (endLineIdx >= linesArr.length - 1) return; // Already at bottom
+
+    if (startLineIdx === endLineIdx) {
+      // Single line move down
+      const temp = linesArr[startLineIdx];
+      linesArr[startLineIdx] = linesArr[startLineIdx + 1];
+      linesArr[startLineIdx + 1] = temp;
+      const newContent = linesArr.join('\n');
+      onChangeContent(newContent);
+
+      setTimeout(() => {
+        if (textareaRef.current) {
+          const newPos = linesArr.slice(0, startLineIdx + 1).join('\n').length + 1 + Math.min(cursorPos.col - 1, linesArr[startLineIdx + 1].length);
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(newPos, newPos);
+          updateCursorPosition();
+        }
+      }, 0);
+    } else {
+      // Multi-line block move down
+      const targetNextLine = linesArr[endLineIdx + 1];
+      const selectedBlock = linesArr.slice(startLineIdx, endLineIdx + 1);
+      linesArr.splice(startLineIdx, (endLineIdx - startLineIdx + 2), targetNextLine, ...selectedBlock);
+      onChangeContent(linesArr.join('\n'));
+    }
+  };
+
+  // Duplicate Line Up / Down
+  const handleDuplicateLine = (direction: 'up' | 'down') => {
+    if (!textareaRef.current) return;
+    const ta = textareaRef.current;
+    const { selectionStart, selectionEnd, value } = ta;
+
+    const before = value.substring(0, selectionStart);
+    const lineStart = before.lastIndexOf('\n') + 1;
+    const nextLineEnd = value.indexOf('\n', selectionEnd);
+    const lineEnd = nextLineEnd === -1 ? value.length : nextLineEnd;
+    const currentLine = value.substring(lineStart, lineEnd);
+
+    let newContent = '';
+    if (direction === 'up') {
+      newContent = value.substring(0, lineStart) + currentLine + '\n' + value.substring(lineStart);
+    } else {
+      newContent = value.substring(0, lineEnd) + '\n' + currentLine + value.substring(lineEnd);
+    }
+    onChangeContent(newContent);
+  };
+
+  // Scroll / Jump to Top of Code
+  const handleScrollToTop = () => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(0, 0);
+      textareaRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      updateCursorPosition();
+    }
+  };
+
+  // Scroll / Jump to Bottom of Code
+  const handleScrollToBottom = () => {
+    if (textareaRef.current) {
+      const len = textareaRef.current.value.length;
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(len, len);
+      textareaRef.current.scrollTo({ top: textareaRef.current.scrollHeight, behavior: 'smooth' });
+      updateCursorPosition();
+    }
+  };
+
+  // Go to Line Number
+  const handleGoToLine = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const lineNum = parseInt(targetLineInput, 10);
+    if (isNaN(lineNum) || lineNum < 1 || !textareaRef.current) {
+      setShowGoToLine(false);
+      return;
+    }
+
+    const linesArr = file.content.split('\n');
+    const clampedLine = Math.min(lineNum, linesArr.length);
+    let charOffset = 0;
+    for (let i = 0; i < clampedLine - 1; i++) {
+      charOffset += linesArr[i].length + 1;
+    }
+
+    textareaRef.current.focus();
+    textareaRef.current.setSelectionRange(charOffset, charOffset);
+    const scrollTarget = (clampedLine - 1) * lineHeightPx;
+    textareaRef.current.scrollTo({ top: scrollTarget, behavior: 'smooth' });
+    updateCursorPosition();
+    setShowGoToLine(false);
+    setTargetLineInput('');
+  };
 
   // Insert Autocomplete Suggestion
   const insertSuggestion = (suggestion: AutocompleteSuggestion) => {
@@ -211,42 +412,48 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       return;
     }
 
-    // 4. Duplicate Line (Alt + Shift + Down or Ctrl + D)
-    if ((e.altKey && e.shiftKey && e.key === 'ArrowDown') || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd')) {
+    // 4. Go to Line (Ctrl + G)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
       e.preventDefault();
-      const before = value.substring(0, selectionStart);
-      const after = value.substring(selectionEnd);
-      const lineStart = before.lastIndexOf('\n') + 1;
-      const nextLineEnd = value.indexOf('\n', selectionEnd);
-      const lineEnd = nextLineEnd === -1 ? value.length : nextLineEnd;
-      const currentLine = value.substring(lineStart, lineEnd);
-
-      const newContent = value.substring(0, lineEnd) + '\n' + currentLine + value.substring(lineEnd);
-      onChangeContent(newContent);
+      setShowGoToLine(true);
       return;
     }
 
-    // 5. Move Line Up / Down (Alt + ArrowUp / Alt + ArrowDown)
+    // 5. Jump to Top (Ctrl + Home / Cmd + Home)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Home') {
+      e.preventDefault();
+      handleScrollToTop();
+      return;
+    }
+
+    // 6. Jump to Bottom (Ctrl + End / Cmd + End)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'End') {
+      e.preventDefault();
+      handleScrollToBottom();
+      return;
+    }
+
+    // 7. Duplicate Line (Alt + Shift + Up / Down or Ctrl + D)
+    if (e.altKey && e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      handleDuplicateLine(e.key === 'ArrowUp' ? 'up' : 'down');
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+      e.preventDefault();
+      handleDuplicateLine('down');
+      return;
+    }
+
+    // 8. Move Line Up / Down (Alt + ArrowUp / Alt + ArrowDown)
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
-      const linesArr = value.split('\n');
-      const lineIndex = value.substring(0, selectionStart).split('\n').length - 1;
-
-      if (e.key === 'ArrowUp' && lineIndex > 0) {
-        const temp = linesArr[lineIndex];
-        linesArr[lineIndex] = linesArr[lineIndex - 1];
-        linesArr[lineIndex - 1] = temp;
-        onChangeContent(linesArr.join('\n'));
-      } else if (e.key === 'ArrowDown' && lineIndex < linesArr.length - 1) {
-        const temp = linesArr[lineIndex];
-        linesArr[lineIndex] = linesArr[lineIndex + 1];
-        linesArr[lineIndex + 1] = temp;
-        onChangeContent(linesArr.join('\n'));
-      }
+      if (e.key === 'ArrowUp') handleMoveLineUp();
+      else handleMoveLineDown();
       return;
     }
 
-    // 6. Delete Line (Ctrl + Shift + K)
+    // 9. Delete Line (Ctrl + Shift + K)
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       const linesArr = value.split('\n');
@@ -256,7 +463,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       return;
     }
 
-    // 7. Toggle Comment (Ctrl + /)
+    // 10. Toggle Comment (Ctrl + /)
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault();
       const commentChar = file.language === 'python' ? '# ' : file.language === 'sql' ? '-- ' : '// ';
@@ -454,21 +661,80 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   };
 
   return (
-    <div className={`h-full flex flex-col ${getThemeBackground()} border-r border-slate-800 relative overflow-hidden select-none`}>
+    <div className={`w-full h-full flex flex-col ${getThemeBackground()} border-r border-slate-800 relative overflow-hidden select-none min-w-0 max-w-full`}>
       {/* VS Code Breadcrumbs Header */}
-      <div className="h-8 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between px-3 text-xs shrink-0 select-none">
-        <div className="flex items-center gap-1.5 text-slate-400 font-mono text-[11px]">
-          <span className="text-slate-500">workspace</span>
-          <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className="text-slate-500">src</span>
-          <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className="text-indigo-300 font-semibold flex items-center gap-1">
-            <FileCode className="w-3 h-3 text-indigo-400" />
-            {file.name}
+      <div className="min-h-8 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between px-2 sm:px-3 py-1 gap-1 text-xs shrink-0 select-none">
+        <div className="flex items-center gap-1.5 text-slate-400 font-mono text-[11px] truncate max-w-[160px] sm:max-w-none">
+          <span className="text-slate-500 hidden sm:inline">workspace</span>
+          <ChevronRight className="w-3 h-3 text-slate-600 hidden sm:inline" />
+          <span className="text-slate-500 hidden xs:inline">src</span>
+          <ChevronRight className="w-3 h-3 text-slate-600 hidden xs:inline" />
+          <span className="text-indigo-300 font-semibold flex items-center gap-1 truncate">
+            <FileCode className="w-3 h-3 text-indigo-400 shrink-0" />
+            <span className="truncate">{file.name}</span>
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0 overflow-x-auto">
+          {/* Code Up / Down & Navigation Tools */}
+          <div className="flex items-center bg-slate-950/80 rounded-lg p-0.5 border border-slate-800 text-slate-400 mr-0.5 sm:mr-1">
+            {/* Scroll to Top */}
+            <button
+              onClick={handleScrollToTop}
+              className="p-1 rounded hover:bg-slate-800 hover:text-slate-200 transition-colors cursor-pointer"
+              title="Scroll / Jump to Top of Code (Ctrl+Home)"
+            >
+              <ChevronsUp className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+
+            {/* Move Line Up */}
+            <button
+              onClick={handleMoveLineUp}
+              className="p-1 rounded hover:bg-slate-800 hover:text-indigo-300 transition-colors cursor-pointer flex items-center gap-0.5"
+              title="Move Line / Selection Up (Alt+↑)"
+            >
+              <ArrowUp className="w-3.5 h-3.5 text-indigo-400" />
+            </button>
+
+            {/* Move Line Down */}
+            <button
+              onClick={handleMoveLineDown}
+              className="p-1 rounded hover:bg-slate-800 hover:text-indigo-300 transition-colors cursor-pointer flex items-center gap-0.5"
+              title="Move Line / Selection Down (Alt+↓)"
+            >
+              <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+            </button>
+
+            {/* Scroll to Bottom */}
+            <button
+              onClick={handleScrollToBottom}
+              className="p-1 rounded hover:bg-slate-800 hover:text-slate-200 transition-colors cursor-pointer"
+              title="Scroll / Jump to Bottom of Code (Ctrl+End)"
+            >
+              <ChevronsDown className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+
+            {/* Duplicate Line Down */}
+            <button
+              onClick={() => handleDuplicateLine('down')}
+              className="p-1 rounded hover:bg-slate-800 hover:text-slate-200 transition-colors cursor-pointer hidden sm:flex"
+              title="Duplicate Line Down (Alt+Shift+↓ or Ctrl+D)"
+            >
+              <CopyPlus className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+
+            {/* Go to Line */}
+            <button
+              onClick={() => setShowGoToLine(!showGoToLine)}
+              className={`p-1 rounded transition-colors cursor-pointer ${
+                showGoToLine ? 'bg-indigo-950 text-indigo-300' : 'hover:bg-slate-800 hover:text-slate-200'
+              }`}
+              title="Go to Line Number (Ctrl+G)"
+            >
+              <Hash className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          </div>
+
           {/* Ask AI for selected code */}
           <button
             onClick={() => {
@@ -477,11 +743,11 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                 : '';
               onAskAi(selectedText);
             }}
-            className="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 transition-colors cursor-pointer"
+            className="px-1.5 sm:px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 transition-colors cursor-pointer shrink-0"
             title="Ask Gemini Copilot about selected code"
           >
             <Sparkles className="w-3 h-3 text-indigo-400" />
-            <span>AI Copilot</span>
+            <span className="hidden sm:inline">AI Copilot</span>
           </button>
 
           {/* Find & Replace toggle */}
@@ -505,6 +771,38 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Go to Line Popover */}
+      {showGoToLine && (
+        <form onSubmit={handleGoToLine} className="p-2 bg-slate-900 border-b border-indigo-500/30 flex items-center gap-2 text-xs shrink-0 animate-fade-in">
+          <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded border border-slate-700">
+            <Hash className="w-3.5 h-3.5 text-indigo-400" />
+            <input
+              type="number"
+              min="1"
+              max={lines.length}
+              autoFocus
+              placeholder={`Go to line (1 - ${lines.length})...`}
+              value={targetLineInput}
+              onChange={(e) => setTargetLineInput(e.target.value)}
+              className="bg-transparent text-slate-100 text-xs focus:outline-none w-44 font-mono"
+            />
+          </div>
+          <button
+            type="submit"
+            className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] transition-colors cursor-pointer"
+          >
+            Jump
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowGoToLine(false)}
+            className="p-1 rounded hover:bg-slate-800 text-slate-400 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </form>
+      )}
 
       {/* Find & Replace Bar */}
       {showFind && (
@@ -554,20 +852,33 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       {/* Editor Main Canvas: Split into Line Numbers & Syntax Overlay & Textarea */}
       <div 
         ref={editorContainerRef}
-        className="flex-1 flex overflow-auto relative font-mono text-xs select-text"
-        style={{ fontSize: `${settings.fontSize}px` }}
+        className="flex-1 flex overflow-hidden relative select-text bg-slate-950/20 w-full max-w-full min-w-0"
+        style={{ fontFamily: editorFontFamily, fontSize: `${fontSize}px` }}
       >
         {/* Line Numbers Gutter */}
         {settings.lineNumbers && (
-          <div className="w-12 py-3 bg-slate-950/60 border-r border-slate-900 select-none text-right pr-3 font-mono text-slate-600 shrink-0">
+          <div 
+            ref={lineNumbersRef}
+            className="w-9 sm:w-12 bg-slate-950/70 border-r border-slate-900 select-none text-right pr-1.5 sm:pr-3 text-slate-600 shrink-0 overflow-hidden"
+            style={{
+              paddingTop: `${paddingY}px`,
+              paddingBottom: `${paddingY}px`,
+              fontFamily: editorFontFamily,
+            }}
+          >
             {lines.map((_, idx) => {
               const lineNum = idx + 1;
               const isCurrent = lineNum === cursorPos.line;
               return (
                 <div
                   key={idx}
-                  className={`leading-relaxed text-[11px] ${
-                    isCurrent ? 'text-indigo-400 font-bold bg-indigo-950/30' : 'hover:text-slate-400'
+                  style={{
+                    height: `${lineHeightPx}px`,
+                    lineHeight: `${lineHeightPx}px`,
+                    fontSize: `${Math.max(10, fontSize - 3)}px`,
+                  }}
+                  className={`font-mono transition-colors ${
+                    isCurrent ? 'text-indigo-400 font-bold bg-indigo-950/40 rounded-sm' : 'hover:text-slate-400'
                   }`}
                 >
                   {lineNum}
@@ -578,33 +889,47 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         )}
 
         {/* Code Canvas Container */}
-        <div className="flex-1 relative overflow-hidden py-3 px-3">
+        <div className="flex-1 min-w-0 relative overflow-hidden w-full max-w-full">
           {/* Active Line Highlight Ribbon */}
           <div
-            className="absolute left-0 right-0 bg-slate-800/30 pointer-events-none border-y border-slate-700/20"
+            className="absolute left-0 right-0 bg-slate-800/35 pointer-events-none border-y border-slate-700/25 z-0 transition-all duration-75"
             style={{
-              top: `${(cursorPos.line - 1) * 20 + 12}px`,
-              height: '20px',
+              top: `${(cursorPos.line - 1) * lineHeightPx + paddingY}px`,
+              height: `${lineHeightPx}px`,
             }}
           />
 
-          {/* Syntax Highlight Overlay */}
-          <div className="absolute inset-0 p-3 pointer-events-none font-mono whitespace-pre leading-relaxed overflow-hidden">
+          {/* Syntax Highlight Overlay (Synchronized Scroll) */}
+          <div
+            ref={syntaxOverlayRef}
+            className="absolute inset-0 pointer-events-none overflow-hidden select-none z-1 w-full"
+            style={sharedEditorStyles}
+          >
             {lines.map((line, idx) => (
-              <div key={idx} className="h-5">
-                {tokenizeLine(line, file.language).map((token, tIdx) => (
-                  <span
-                    key={tIdx}
-                    className={getTokenClassName(token.type, settings.theme)}
-                  >
-                    {token.value}
-                  </span>
-                ))}
+              <div 
+                key={idx}
+                style={{
+                  height: `${lineHeightPx}px`,
+                  lineHeight: `${lineHeightPx}px`,
+                }}
+              >
+                {line.length === 0 ? (
+                  '\u00A0'
+                ) : (
+                  tokenizeLine(line, file.language).map((token, tIdx) => (
+                    <span
+                      key={tIdx}
+                      className={getTokenClassName(token.type, settings.theme)}
+                    >
+                      {token.value}
+                    </span>
+                  ))
+                )}
               </div>
             ))}
           </div>
 
-          {/* Editable Transparent Interactive Textarea */}
+          {/* Editable Transparent Interactive Textarea (Caret matches underlying text 1:1, horizontal scroll enabled) */}
           <textarea
             ref={textareaRef}
             value={file.content}
@@ -616,14 +941,17 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             onClick={updateCursorPosition}
             onKeyUp={updateCursorPosition}
             onSelect={updateCursorPosition}
+            onScroll={handleScroll}
             spellCheck={false}
             autoCapitalize="off"
             autoComplete="off"
             autoCorrect="off"
-            className="absolute inset-0 w-full h-full p-3 font-mono text-transparent caret-white resize-none bg-transparent focus:outline-none leading-relaxed whitespace-pre z-10 selection:bg-indigo-500/40"
+            className="absolute inset-0 w-full h-full resize-none bg-transparent focus:outline-none z-10 selection:bg-indigo-500/40 overflow-auto"
             style={{
-              fontSize: `${settings.fontSize}px`,
-              tabSize: settings.tabSize,
+              ...sharedEditorStyles,
+              color: 'transparent',
+              caretColor: '#ffffff',
+              overflow: 'auto',
             }}
           />
 
@@ -678,7 +1006,18 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="capitalize text-indigo-300 font-medium">{file.language}</span>
+          {onOpenLanguagesHub ? (
+            <button
+              onClick={onOpenLanguagesHub}
+              className="capitalize text-indigo-300 hover:text-white font-medium flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+              title="All Languages Hub & Switcher (Ctrl+L)"
+            >
+              <Globe className="w-3 h-3 text-indigo-400" />
+              <span>{file.language}</span>
+            </button>
+          ) : (
+            <span className="capitalize text-indigo-300 font-medium">{file.language}</span>
+          )}
           <span className="text-emerald-400 font-semibold flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
             Ready

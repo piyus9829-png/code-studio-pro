@@ -4,12 +4,15 @@ import {
   ConsoleTab, 
   ExecutionResult,
   TestCase,
-  Language 
+  Language,
+  ConsoleSettings,
+  ApiResponse 
 } from '../types';
 import { evaluateReplExpression } from '../utils/executor';
 import { ChartPlotViewer } from './ChartPlotViewer';
 import { DatabaseExplorer } from './DatabaseExplorer';
 import { VSCodeSQLViewer } from './VSCodeSQLViewer';
+import { ApiExplorer } from './ApiExplorer';
 import { 
   Terminal as TerminalIcon, 
   Eye, 
@@ -24,6 +27,7 @@ import {
   CornerDownLeft,
   Sparkles,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   FileInput,
   CheckCircle2,
@@ -31,7 +35,14 @@ import {
   Play,
   Plus,
   BarChart3,
-  Database
+  Database,
+  Maximize2,
+  Minimize2,
+  X,
+  Sliders,
+  Zap,
+  Settings as SettingsIcon,
+  Minus
 } from 'lucide-react';
 
 interface OutputConsoleProps {
@@ -51,6 +62,14 @@ interface OutputConsoleProps {
   onDeleteTestCase: (id: string) => void;
   activeLanguage: Language;
   onInsertCodeSnippet?: (snippet: string) => void;
+  // Panel minimize / maximize / close controls
+  isMinimized?: boolean;
+  onToggleMinimize?: () => void;
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
+  onClose?: () => void;
+  activeCode?: string;
+  onExecuteApiRequest?: (method: string, path: string, headers: Record<string, string>, body: string) => Promise<ApiResponse>;
 }
 
 export const OutputConsole: React.FC<OutputConsoleProps> = ({
@@ -69,6 +88,13 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
   onDeleteTestCase,
   activeLanguage,
   onInsertCodeSnippet,
+  isMinimized = false,
+  onToggleMinimize,
+  isMaximized = false,
+  onToggleMaximize,
+  onClose,
+  activeCode = '',
+  onExecuteApiRequest,
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'error' | 'warn' | 'info' | 'stdin'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -76,13 +102,34 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
   const [replHistory, setReplHistory] = useState<Array<{ input: string; output: string; isError: boolean }>>([]);
   const [copied, setCopied] = useState(false);
   const [activeTestCaseId, setActiveTestCaseId] = useState<string>(testCases[0]?.id || '');
+  const [isConsoleSettingsOpen, setIsConsoleSettingsOpen] = useState(false);
+  const [consoleSettings, setConsoleSettings] = useState<ConsoleSettings>(() => {
+    try {
+      const saved = localStorage.getItem('cloudide_console_settings');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      fontSize: 12,
+      lineWrap: true,
+      showTimestamps: false,
+      autoScroll: true,
+      clearOnRun: false,
+    };
+  });
+
   const consoleBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (activeTab === 'console' && consoleBottomRef.current) {
+    try {
+      localStorage.setItem('cloudide_console_settings', JSON.stringify(consoleSettings));
+    } catch {}
+  }, [consoleSettings]);
+
+  useEffect(() => {
+    if (activeTab === 'console' && consoleSettings.autoScroll && consoleBottomRef.current) {
       consoleBottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [executionResult?.logs, activeTab]);
+  }, [executionResult?.logs, activeTab, consoleSettings.autoScroll]);
 
   const handleReplSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,14 +166,98 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
 
   const errorCount = (executionResult?.logs || []).filter(l => l.type === 'error').length;
   const warnCount = (executionResult?.logs || []).filter(l => l.type === 'warn').length;
-
   const currentTestCase = testCases.find(tc => tc.id === activeTestCaseId) || testCases[0];
 
+  // 1. Minimized State Dock View
+  if (isMinimized) {
+    return (
+      <div className="h-9 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-3 shrink-0 select-none text-xs font-sans">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onToggleMinimize}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-medium transition-colors cursor-pointer"
+            title="Restore / Expand Output Panel"
+          >
+            <ChevronUp className="w-3.5 h-3.5" />
+            <TerminalIcon className="w-3.5 h-3.5" />
+            <span>Output Panel (Minimized)</span>
+          </button>
+
+          {executionResult && (
+            <div className="flex items-center gap-1.5 font-mono text-[11px]">
+              {executionResult.status === 'success' ? (
+                <span className="px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  Exit 0
+                </span>
+              ) : (
+                <span className="px-2 py-0.2 rounded-full bg-red-500/20 text-red-300 font-bold border border-red-500/30 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Exit {executionResult.exitCode ?? 1}
+                </span>
+              )}
+              <span className="text-slate-500 hidden sm:inline">{executionResult.executionTimeMs}ms</span>
+            </div>
+          )}
+        </div>
+
+        {/* Tab Shortcuts on Minimized Bar */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              onChangeTab('console');
+              if (onToggleMinimize) onToggleMinimize();
+            }}
+            className="px-2 py-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-[11px]"
+          >
+            Logs ({filteredLogs.length})
+          </button>
+          <button
+            onClick={() => {
+              onChangeTab('stdin');
+              if (onToggleMinimize) onToggleMinimize();
+            }}
+            className="px-2 py-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-[11px]"
+          >
+            Input
+          </button>
+          <button
+            onClick={() => {
+              onChangeTab('api-tester');
+              if (onToggleMinimize) onToggleMinimize();
+            }}
+            className="px-2 py-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-[11px] hidden sm:inline"
+          >
+            API Tester
+          </button>
+
+          <button
+            onClick={onToggleMinimize}
+            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white ml-1"
+            title="Expand Panel"
+          >
+            <ChevronUp className="w-3.5 h-3.5" />
+          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-red-400 transition-colors"
+              title="Close Output Panel"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Full Expanded Output Panel
   return (
     <div className="h-full flex flex-col bg-slate-900 border-t sm:border-t-0 sm:border-l border-slate-800 select-text overflow-hidden">
       {/* Console Navigation Bar */}
-      <div className="h-10 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-3 shrink-0 select-none overflow-x-auto">
-        <div className="flex items-center gap-1">
+      <div className="h-10 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-3 shrink-0 select-none overflow-x-auto gap-2">
+        <div className="flex items-center gap-1 shrink-0 overflow-x-auto">
           {/* Console Tab */}
           <button
             onClick={() => onChangeTab('console')}
@@ -175,6 +306,19 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
             <span className="text-[10px] text-slate-500 font-mono">({testCases.length})</span>
           </button>
 
+          {/* FastAPI & Django API Tester Tab */}
+          <button
+            onClick={() => onChangeTab('api-tester')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              activeTab === 'api-tester'
+                ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-yellow-400" />
+            <span>API Tester</span>
+          </button>
+
           {/* Live Preview Tab */}
           {(activeLanguage === 'html' || activeLanguage === 'javascript' || activeLanguage === 'typescript') && (
             <button
@@ -217,11 +361,6 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
             >
               <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
               <span>Plots & Charts</span>
-              {executionResult?.logs.filter(l => l.type === 'chart' || l.chartData).length ? (
-                <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">
-                  {executionResult.logs.filter(l => l.type === 'chart' || l.chartData).length}
-                </span>
-              ) : null}
             </button>
           )}
 
@@ -241,18 +380,18 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
           )}
         </div>
 
-        {/* Right Console Actions */}
-        <div className="flex items-center gap-1.5">
+        {/* Right Actions: Filter, Copy, Clear, Customize, Maximize, Minimize, Close */}
+        <div className="flex items-center gap-1 shrink-0">
           {activeTab === 'console' && (
             <>
-              <div className="relative hidden md:block">
+              <div className="relative hidden xl:block">
                 <Search className="w-3 h-3 text-slate-500 absolute left-2 top-2" />
                 <input
                   type="text"
                   placeholder="Filter logs..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-slate-950/80 border border-slate-800 rounded-md pl-6 pr-2 py-0.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 w-28"
+                  className="bg-slate-950/80 border border-slate-800 rounded-md pl-6 pr-2 py-0.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 w-24"
                 />
               </div>
 
@@ -273,6 +412,133 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
               </button>
             </>
           )}
+
+          {/* Console Customization Settings Menu Button */}
+          <div className="relative">
+            <button
+              onClick={() => setIsConsoleSettingsOpen(prev => !prev)}
+              className={`p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer ${
+                isConsoleSettingsOpen ? 'bg-slate-800 text-indigo-400' : ''
+              }`}
+              title="Output & Console Preferences"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Popover Settings Dropdown */}
+            {isConsoleSettingsOpen && (
+              <div className="absolute right-0 top-full mt-1 w-64 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-3 z-50 text-xs font-sans space-y-2.5">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                  <span className="font-semibold text-slate-200">Console Customization</span>
+                  <button
+                    onClick={() => setIsConsoleSettingsOpen(false)}
+                    className="text-slate-500 hover:text-slate-300"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Font Size */}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Terminal Font Size</span>
+                  <div className="flex items-center gap-1">
+                    {[11, 12, 13, 14].map(sz => (
+                      <button
+                        key={sz}
+                        onClick={() => setConsoleSettings(s => ({ ...s, fontSize: sz }))}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer ${
+                          consoleSettings.fontSize === sz
+                            ? 'bg-indigo-600 text-white font-bold'
+                            : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {sz}px
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Word Wrap */}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Wrap Long Lines</span>
+                  <input
+                    type="checkbox"
+                    checked={consoleSettings.lineWrap}
+                    onChange={(e) => setConsoleSettings(s => ({ ...s, lineWrap: e.target.checked }))}
+                    className="rounded bg-slate-800 border-slate-700 text-indigo-500 cursor-pointer"
+                  />
+                </div>
+
+                {/* Timestamps */}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Show Timestamps</span>
+                  <input
+                    type="checkbox"
+                    checked={consoleSettings.showTimestamps}
+                    onChange={(e) => setConsoleSettings(s => ({ ...s, showTimestamps: e.target.checked }))}
+                    className="rounded bg-slate-800 border-slate-700 text-indigo-500 cursor-pointer"
+                  />
+                </div>
+
+                {/* Auto Scroll */}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Auto-scroll to Bottom</span>
+                  <input
+                    type="checkbox"
+                    checked={consoleSettings.autoScroll}
+                    onChange={(e) => setConsoleSettings(s => ({ ...s, autoScroll: e.target.checked }))}
+                    className="rounded bg-slate-800 border-slate-700 text-indigo-500 cursor-pointer"
+                  />
+                </div>
+
+                {/* Clear on Run */}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Clear Logs on Run</span>
+                  <input
+                    type="checkbox"
+                    checked={consoleSettings.clearOnRun}
+                    onChange={(e) => setConsoleSettings(s => ({ ...s, clearOnRun: e.target.checked }))}
+                    className="rounded bg-slate-800 border-slate-700 text-indigo-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="h-4 w-px bg-slate-800 mx-0.5" />
+
+          {/* Minimize Button */}
+          {onToggleMinimize && (
+            <button
+              onClick={onToggleMinimize}
+              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              title="Minimize Output Panel"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Maximize Button */}
+          {onToggleMaximize && (
+            <button
+              onClick={onToggleMaximize}
+              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              title={isMaximized ? "Restore Panel Size" : "Maximize Output Panel"}
+            >
+              {isMaximized ? <Minimize2 className="w-3.5 h-3.5 text-indigo-400" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+          )}
+
+          {/* Close / Hide Button */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
+              title="Hide Output Panel (Ctrl+`)"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -281,8 +547,8 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
         {/* Output Console Tab */}
         {activeTab === 'console' && (
           <div className="h-full flex flex-col font-mono text-xs bg-slate-950">
-            {/* Filter Pills */}
-            <div className="px-3 py-1.5 bg-slate-900/60 border-b border-slate-800/80 flex items-center justify-between text-[11px] select-none shrink-0">
+            {/* Filter Pills & Execution Status Banner */}
+            <div className="px-3 py-1.5 bg-slate-900/60 border-b border-slate-800/80 flex items-center justify-between text-[11px] select-none shrink-0 flex-wrap gap-2">
               <div className="flex items-center gap-1.5">
                 <span className="text-slate-500 font-semibold">Filter:</span>
                 <button
@@ -312,17 +578,38 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
               </div>
 
               {executionResult && (
-                <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                  <span>⏱️ {executionResult.executionTimeMs}ms</span>
+                <div className="text-[11px] flex items-center gap-2 flex-wrap">
+                  {executionResult.executionEngine && (
+                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                      ⚡ {executionResult.executionEngine}
+                    </span>
+                  )}
+
+                  {executionResult.status === 'success' ? (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/30 flex items-center gap-1">
+                      <Check className="w-3 h-3" />
+                      Exit 0 (Success)
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-bold text-[10px] border border-red-500/30 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {executionResult.compilerOutput ? 'Compilation Error' : `Exit ${executionResult.exitCode ?? 1} (Error)`}
+                    </span>
+                  )}
+
+                  <span className="text-slate-400">⏱️ {executionResult.executionTimeMs}ms</span>
                   {executionResult.memoryUsedMb && (
-                    <span>💾 {executionResult.memoryUsedMb}MB</span>
+                    <span className="text-slate-400">💾 {executionResult.memoryUsedMb}MB</span>
                   )}
                 </div>
               )}
             </div>
 
             {/* Scrollable Logs Body */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+            <div 
+              className="flex-1 overflow-y-auto p-3 space-y-1.5 custom-scrollbar"
+              style={{ fontSize: `${consoleSettings.fontSize}px` }}
+            >
               {filteredLogs.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2 py-12">
                   <TerminalIcon className="w-8 h-8 text-slate-700" />
@@ -330,7 +617,12 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
                 </div>
               ) : (
                 filteredLogs.map((log) => (
-                  <LogItem key={log.id} log={log} />
+                  <LogItem 
+                    key={log.id} 
+                    log={log} 
+                    lineWrap={consoleSettings.lineWrap}
+                    showTimestamp={consoleSettings.showTimestamps}
+                  />
                 ))
               )}
               <div ref={consoleBottomRef} />
@@ -338,18 +630,18 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
 
             {/* Interactive REPL Prompt */}
             <form onSubmit={handleReplSubmit} className="border-t border-slate-800 bg-slate-900/90 p-2 flex items-center gap-2 shrink-0">
-              <span className="text-indigo-400 font-bold pl-1">&gt;</span>
+              <span className="text-indigo-400 font-mono text-xs pl-1">&gt;</span>
               <input
                 type="text"
                 value={replInput}
                 onChange={(e) => setReplInput(e.target.value)}
-                placeholder="Type expression to evaluate (e.g. 2 + 2, Math.PI)..."
-                className="flex-1 bg-transparent text-slate-100 text-xs focus:outline-none placeholder-slate-600 font-mono"
+                placeholder="Evaluate live expression or test statement..."
+                className="flex-1 bg-transparent text-slate-100 placeholder-slate-600 focus:outline-none font-mono text-xs"
               />
               <button
                 type="submit"
-                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer"
-                title="Evaluate expression"
+                className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer"
+                title="Execute REPL expression"
               >
                 <CornerDownLeft className="w-3.5 h-3.5" />
               </button>
@@ -357,115 +649,148 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
           </div>
         )}
 
-        {/* Custom Stdin Input Tab */}
+        {/* FastAPI & Django API Tester Tab */}
+        {activeTab === 'api-tester' && (
+          <ApiExplorer
+            code={activeCode}
+            language={activeLanguage}
+            onExecuteRequest={onExecuteApiRequest || (async () => ({
+              status: 200,
+              statusText: 'OK',
+              timeMs: 1,
+              headers: {},
+              body: { message: 'API Tester Ready' },
+              rawText: '{"message": "API Tester Ready"}'
+            }))}
+            onInsertCodeSnippet={onInsertCodeSnippet}
+          />
+        )}
+
+        {/* Custom Standard Input Tab */}
         {activeTab === 'stdin' && (
-          <div className="h-full flex flex-col bg-slate-950 p-4 font-mono text-xs">
+          <div className="h-full flex flex-col p-4 bg-slate-950 font-sans">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h3 className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
-                  <FileInput className="w-4 h-4 text-amber-400" />
-                  <span>Standard Input (stdin)</span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Provide custom input data consumed by <code className="text-amber-300">cin</code>, <code className="text-amber-300">scanf</code>, <code className="text-amber-300">input()</code>, or <code className="text-amber-300">readline()</code>.
-                </p>
+                <h3 className="text-sm font-semibold text-slate-200">Standard Input Stream (stdin)</h3>
+                <p className="text-xs text-slate-400">Passed directly to std::cin, scanf(), input(), Scanner, and readline()</p>
               </div>
               <button
                 onClick={() => onChangeStdin('')}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer"
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
               >
-                Clear Input
+                Clear input
               </button>
             </div>
-
             <textarea
               value={stdinInput}
               onChange={(e) => onChangeStdin(e.target.value)}
-              placeholder="Enter input here (e.g., lines of numbers, strings)..."
-              className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-xl p-3 font-mono text-slate-100 text-xs resize-none focus:outline-none focus:border-indigo-500 leading-relaxed"
+              placeholder="Enter your input values here (e.g. array length followed by numbers or multiline strings)..."
+              className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none shadow-inner"
             />
           </div>
         )}
 
-        {/* Test Cases Judge Tab */}
+        {/* Test Cases Tab */}
         {activeTab === 'testcases' && (
-          <div className="h-full flex flex-col bg-slate-950 p-4 overflow-hidden">
-            <div className="flex items-center justify-between mb-3 shrink-0">
-              <div>
-                <h3 className="text-sm font-bold text-slate-200">Competitive Programming Test Judge</h3>
-                <p className="text-xs text-slate-400">Validate code against sample & hidden test cases</p>
-              </div>
-              <div className="flex items-center gap-2">
+          <div className="h-full flex flex-col md:flex-row bg-slate-950 overflow-hidden font-sans">
+            {/* Left: Test Cases Selector */}
+            <div className="w-full md:w-56 bg-slate-900/60 border-r border-slate-800 flex flex-col shrink-0">
+              <div className="p-2 border-b border-slate-800 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-300">Test Suite</span>
                 <button
                   onClick={onAddTestCase}
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  className="p-1 rounded hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 cursor-pointer"
+                  title="Add Test Case"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Test Case</span>
+                  <Plus className="w-4 h-4" />
                 </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {testCases.map((tc, idx) => (
+                  <button
+                    key={tc.id}
+                    onClick={() => setActiveTestCaseId(tc.id)}
+                    className={`w-full text-left p-2 rounded-lg text-xs transition-all flex items-center justify-between cursor-pointer ${
+                      tc.id === activeTestCaseId
+                        ? 'bg-indigo-600/20 text-indigo-200 border border-indigo-500/40'
+                        : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="truncate font-medium">{tc.name || `Case #${idx + 1}`}</span>
+                    {tc.status === 'passed' && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    )}
+                    {tc.status === 'failed' && (
+                      <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-2 border-t border-slate-800">
                 <button
                   onClick={onRunTestCases}
                   disabled={isRunning}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 cursor-pointer"
+                  className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/20 cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Run All Tests</span>
+                  <span>Run All Test Cases</span>
                 </button>
               </div>
             </div>
 
-            {/* Test Case Selector Tabs */}
-            <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 shrink-0">
-              {testCases.map((tc, idx) => (
-                <button
-                  key={tc.id}
-                  onClick={() => setActiveTestCaseId(tc.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    tc.id === currentTestCase?.id
-                      ? 'bg-slate-800 text-white border border-slate-700'
-                      : 'bg-slate-900/60 text-slate-400 hover:bg-slate-800/40'
-                  }`}
-                >
-                  {tc.status === 'passed' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
-                  {tc.status === 'failed' && <XCircle className="w-3.5 h-3.5 text-red-400" />}
-                  <span>{tc.name || `Case ${idx + 1}`}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Active Test Case Detail View */}
+            {/* Right: Active Test Case Details */}
             {currentTestCase && (
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 overflow-y-auto">
-                <div className="flex flex-col">
-                  <label className="text-xs font-semibold text-slate-300 mb-1">Standard Input (stdin)</label>
-                  <textarea
-                    value={currentTestCase.input}
-                    onChange={(e) => onUpdateTestCase(currentTestCase.id, { input: e.target.value })}
-                    className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-200 resize-none focus:outline-none focus:border-indigo-500 min-h-[120px]"
+              <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4">
+                <div className="flex items-center justify-between">
+                  <input
+                    type="text"
+                    value={currentTestCase.name}
+                    onChange={(e) => onUpdateTestCase(currentTestCase.id, { name: e.target.value })}
+                    className="bg-transparent text-sm font-bold text-slate-100 focus:outline-none border-b border-transparent focus:border-indigo-500"
                   />
+                  {testCases.length > 1 && (
+                    <button
+                      onClick={() => onDeleteTestCase(currentTestCase.id)}
+                      className="p-1 rounded text-slate-500 hover:text-red-400 transition-colors"
+                      title="Delete test case"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex flex-col">
-                  <label className="text-xs font-semibold text-slate-300 mb-1">Expected Output</label>
-                  <textarea
-                    value={currentTestCase.expectedOutput}
-                    onChange={(e) => onUpdateTestCase(currentTestCase.id, { expectedOutput: e.target.value })}
-                    className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-200 resize-none focus:outline-none focus:border-indigo-500 min-h-[120px]"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+                  <div className="flex flex-col">
+                    <label className="text-xs font-semibold text-slate-400 mb-1">Input Data</label>
+                    <textarea
+                      value={currentTestCase.input}
+                      onChange={(e) => onUpdateTestCase(currentTestCase.id, { input: e.target.value })}
+                      className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none min-h-[120px]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col">
+                    <label className="text-xs font-semibold text-slate-400 mb-1">Expected Output</label>
+                    <textarea
+                      value={currentTestCase.expectedOutput}
+                      onChange={(e) => onUpdateTestCase(currentTestCase.id, { expectedOutput: e.target.value })}
+                      className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none min-h-[120px]"
+                    />
+                  </div>
                 </div>
 
                 {currentTestCase.actualOutput !== undefined && (
-                  <div className="md:col-span-2 bg-slate-900/80 border border-slate-800 rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-slate-300">Actual Program Output</span>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                        currentTestCase.status === 'passed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-                      }`}>
-                        {currentTestCase.status?.toUpperCase()} ({currentTestCase.executionTimeMs || 0}ms)
+                  <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-slate-300">Actual Output</span>
+                      <span className={`text-xs font-bold ${currentTestCase.status === 'passed' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {currentTestCase.status === 'passed' ? '✓ Passed' : '✗ Output Mismatch'}
                       </span>
                     </div>
-                    <pre className="bg-slate-950 p-2.5 rounded-lg font-mono text-xs text-slate-200 overflow-x-auto border border-slate-800 whitespace-pre-wrap">
-                      {currentTestCase.actualOutput || '(No output)'}
+                    <pre className="text-xs font-mono text-slate-200 whitespace-pre-wrap">
+                      {currentTestCase.actualOutput || '(empty output)'}
                     </pre>
                   </div>
                 )}
@@ -476,64 +801,37 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
 
         {/* Live Preview Tab */}
         {activeTab === 'preview' && (
-          <div className="h-full w-full bg-slate-950">
+          <div className="h-full flex flex-col bg-white">
             {customPreviewContent}
           </div>
         )}
 
-        {/* Data View / SQL Grid Tab */}
+        {/* Data Table Tab */}
         {activeTab === 'table' && (
-          <div className="h-full overflow-hidden bg-slate-950">
-            {activeLanguage === 'sql' || (executionResult?.sqlQueryResults && executionResult.sqlQueryResults.length > 0) ? (
-              <VSCodeSQLViewer 
-                executionResult={executionResult}
-                onOpenExplorer={() => onChangeTab('database')}
-                onInsertCodeSnippet={onInsertCodeSnippet}
-              />
+          <div className="h-full p-4 overflow-auto bg-slate-950 custom-scrollbar">
+            {executionResult?.sqlQueryResults && executionResult.sqlQueryResults.length > 0 ? (
+              <VSCodeSQLViewer results={executionResult.sqlQueryResults} />
             ) : (
-              <div className="h-full overflow-auto p-4">
-                <DataTableViewer executionResult={executionResult} />
-              </div>
+              <DataTableViewer executionResult={executionResult} />
             )}
           </div>
         )}
 
-        {/* Charts Tab */}
+        {/* Plots & Charts Tab */}
         {activeTab === 'charts' && (
-          <div className="h-full overflow-y-auto p-4 bg-slate-950">
-            {executionResult?.logs.some(l => l.type === 'chart' || l.chartData) ? (
-              <div className="space-y-4 max-w-4xl mx-auto">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-cyan-400" />
-                    <span>Generated Data Visualizations</span>
-                  </h3>
-                  <span className="text-xs text-slate-400">
-                    {executionResult.logs.filter(l => l.type === 'chart' || l.chartData).length} Figure(s)
-                  </span>
-                </div>
-                {executionResult.logs
-                  .filter(l => l.type === 'chart' || l.chartData)
-                  .map(l => l.chartData && (
-                    <ChartPlotViewer key={l.id} plotData={l.chartData} />
-                  ))}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-500 py-16">
-                <BarChart3 className="w-10 h-10 text-slate-700 mb-3" />
-                <h3 className="text-sm font-semibold text-slate-400">No Matplotlib Charts Generated</h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm text-center">
-                  Use <code className="text-cyan-400 bg-slate-900 px-1 py-0.5 rounded">plt.plot()</code> and <code className="text-cyan-400 bg-slate-900 px-1 py-0.5 rounded">plt.show()</code> in your Python code to render charts.
-                </p>
-              </div>
-            )}
+          <div className="h-full p-4 overflow-auto bg-slate-950 custom-scrollbar">
+            <ChartsTabContent executionResult={executionResult} />
           </div>
         )}
 
         {/* Database Explorer Tab */}
         {activeTab === 'database' && (
           <div className="h-full overflow-hidden bg-slate-950">
-            <DatabaseExplorer onInsertCodeSnippet={onInsertCodeSnippet} />
+            <DatabaseExplorer
+              onInsertQuery={(query) => {
+                if (onInsertCodeSnippet) onInsertCodeSnippet(query);
+              }}
+            />
           </div>
         )}
       </div>
@@ -541,28 +839,23 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
   );
 };
 
-interface LogItemProps {
-  log: ConsoleLogEntry;
-}
-
-const LogItem: React.FC<LogItemProps> = ({ log }) => {
+const LogItem: React.FC<{ 
+  log: ConsoleLogEntry; 
+  lineWrap?: boolean; 
+  showTimestamp?: boolean; 
+}> = ({ log, lineWrap = true, showTimestamp = false }) => {
   const getLogStyle = () => {
     switch (log.type) {
       case 'error':
-        return 'bg-red-950/30 border-red-900/50 text-red-300';
+        return 'text-red-300 bg-red-950/30 border-red-900/40';
       case 'warn':
-        return 'bg-amber-950/30 border-amber-900/50 text-amber-300';
+        return 'text-amber-300 bg-amber-950/30 border-amber-900/40';
       case 'info':
-        return 'bg-indigo-950/20 border-indigo-900/40 text-indigo-200';
+        return 'text-cyan-300 bg-cyan-950/20 border-cyan-900/30';
       case 'stdin':
-        return 'bg-amber-950/20 border-amber-900/40 text-amber-200';
-      case 'table':
-        return 'bg-slate-900/80 border-slate-800 text-slate-200';
-      case 'chart':
-        return 'bg-slate-900/90 border-slate-800 text-cyan-200';
-      case 'log':
+        return 'text-amber-200 bg-amber-950/20 border-amber-900/30';
       default:
-        return 'bg-slate-900/40 border-slate-800/60 text-slate-300';
+        return 'text-slate-200 bg-slate-900/50 border-slate-800/60';
     }
   };
 
@@ -583,11 +876,18 @@ const LogItem: React.FC<LogItemProps> = ({ log }) => {
     }
   };
 
+  const formattedTime = new Date(log.timestamp).toLocaleTimeString();
+
   return (
-    <div className={`flex flex-col gap-2 p-2 rounded-lg border text-xs font-mono transition-colors ${getLogStyle()}`}>
+    <div className={`flex flex-col gap-1.5 p-2 rounded-lg border text-xs font-mono transition-colors ${getLogStyle()}`}>
       <div className="flex items-start gap-2">
         {getIcon()}
-        <div className="flex-1 whitespace-pre-wrap break-all leading-relaxed">
+        {showTimestamp && (
+          <span className="text-[10px] text-slate-500 font-mono shrink-0 select-none">
+            [{formattedTime}]
+          </span>
+        )}
+        <div className={`flex-1 leading-relaxed ${lineWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre overflow-x-auto'}`}>
           {log.args.map((arg, idx) => {
             if (typeof arg === 'object' && arg !== null) {
               return (
@@ -662,6 +962,34 @@ const DataTableViewer: React.FC<{ executionResult: ExecutionResult | null }> = (
           </tbody>
         </table>
       </div>
+    </div>
+  );
+};
+
+const ChartsTabContent: React.FC<{ executionResult: ExecutionResult | null }> = ({ executionResult }) => {
+  const chartLogs = (executionResult?.logs || []).filter(l => l.type === 'chart' || l.chartData);
+
+  if (chartLogs.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-slate-500 py-16 font-sans">
+        <BarChart3 className="w-12 h-12 text-slate-700 mb-3" />
+        <h3 className="text-sm font-semibold text-slate-300">No Matplotlib / Plots Generated Yet</h3>
+        <p className="text-xs text-slate-500 max-w-sm text-center mt-1">
+          In your Python code, use <code className="text-cyan-400 bg-slate-900 px-1 py-0.5 rounded">plt.plot()</code>, <code className="text-cyan-400 bg-slate-900 px-1 py-0.5 rounded">plt.bar()</code>, or <code className="text-cyan-400 bg-slate-900 px-1 py-0.5 rounded">plt.show()</code> to generate interactive visual charts.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {chartLogs.map((log) => (
+        log.chartData ? (
+          <div key={log.id} className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-xl">
+            <ChartPlotViewer plotData={log.chartData} />
+          </div>
+        ) : null
+      ))}
     </div>
   );
 };

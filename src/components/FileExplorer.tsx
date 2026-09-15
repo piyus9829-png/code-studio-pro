@@ -12,7 +12,9 @@ import {
   Terminal,
   ChevronRight,
   ChevronDown,
-  Sparkles
+  Sparkles,
+  Globe,
+  X
 } from 'lucide-react';
 
 interface FileExplorerProps {
@@ -22,6 +24,8 @@ interface FileExplorerProps {
   onCreateFile: (name: string, language: Language) => void;
   onDeleteFile: (fileId: string) => void;
   onOpenTemplates: () => void;
+  onOpenLanguagesHub?: () => void;
+  onClose?: () => void;
 }
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({
@@ -31,6 +35,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onCreateFile,
   onDeleteFile,
   onOpenTemplates,
+  onOpenLanguagesHub,
+  onClose,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newFileName, setNewFileName] = useState('');
@@ -43,6 +49,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     if (name.endsWith('.c') || name.endsWith('.h')) {
       return <Terminal className="w-3.5 h-3.5 text-cyan-400 shrink-0" />;
     }
+    if (name.endsWith('.java')) {
+      return <FileCode className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
+    }
     switch (lang) {
       case 'javascript':
         return <FileCode className="w-3.5 h-3.5 text-yellow-400 shrink-0" />;
@@ -50,6 +59,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         return <Binary className="w-3.5 h-3.5 text-blue-400 shrink-0" />;
       case 'python':
         return <Terminal className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
+      case 'java':
+        return <FileCode className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
       case 'cpp':
         return <Terminal className="w-3.5 h-3.5 text-blue-400 shrink-0" />;
       case 'c':
@@ -67,6 +78,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const inferLanguage = (name: string): Language => {
     if (name.endsWith('.cpp') || name.endsWith('.hpp') || name.endsWith('.cc')) return 'cpp';
     if (name.endsWith('.c') || name.endsWith('.h')) return 'c';
+    if (name.endsWith('.java')) return 'java';
     if (name.endsWith('.ts') || name.endsWith('.tsx')) return 'typescript';
     if (name.endsWith('.py')) return 'python';
     if (name.endsWith('.sql')) return 'sql';
@@ -102,6 +114,15 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer ml-1"
+              title="Close Explorer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -172,11 +193,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         )}
       </div>
 
-      {/* Starter Templates Banner */}
-      <div className="p-3 border-t border-slate-800 bg-slate-950/40">
+      {/* Starter Templates & Languages Hub Banners */}
+      <div className="p-2.5 border-t border-slate-800 bg-slate-950/60 space-y-1.5">
+        {onOpenLanguagesHub && (
+          <button
+            onClick={onOpenLanguagesHub}
+            className="w-full py-1.5 px-3 rounded-lg bg-indigo-600/15 hover:bg-indigo-600/30 text-indigo-300 hover:text-white border border-indigo-500/30 flex items-center justify-center gap-2 font-semibold text-xs transition-all cursor-pointer shadow-sm"
+            title="Open All Languages & Compilers Hub"
+          >
+            <Globe className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Languages Hub</span>
+          </button>
+        )}
+
         <button
           onClick={onOpenTemplates}
-          className="w-full py-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 flex items-center justify-center gap-2 font-semibold text-xs transition-all cursor-pointer"
+          className="w-full py-1.5 px-3 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 flex items-center justify-center gap-2 font-medium text-xs transition-all cursor-pointer"
         >
           <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
           <span>Starter Templates</span>

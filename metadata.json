@@ -1,6 +1,6 @@
 {
   "name": "Cloud Development Studio",
-  "description": "A powerful full-stack cloud IDE and code execution sandbox with multi-language support, real-time output console, interactive live preview, and AI coding assistant.",
+  "description": "Write, compile, and execute C++, Python, Java, JavaScript, TypeScript, and SQL online with Cloud Development Studio. Features real-time output, AI Copilot, and full terminal sandbox.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

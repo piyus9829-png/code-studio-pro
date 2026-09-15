@@ -149,6 +149,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       action: () => { onSelectLanguage('python'); onClose(); }
     },
     {
+      id: 'lang-java',
+      title: 'Change Language Mode: Java (OpenJDK 15)',
+      category: 'Language',
+      icon: <FileCode className="w-4 h-4 text-rose-400" />,
+      action: () => { onSelectLanguage('java'); onClose(); }
+    },
+    {
       id: 'export-project',
       title: 'File: Export Project Archive (.json)',
       category: 'File',

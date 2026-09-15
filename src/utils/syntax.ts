@@ -67,6 +67,21 @@ const SQL_KEYWORDS = new Set([
   'not', 'null', 'primary', 'key', 'int', 'varchar', 'round', 'count', 'sum', 'avg'
 ]);
 
+const JAVA_KEYWORDS = new Set([
+  'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class',
+  'const', 'continue', 'default', 'do', 'double', 'else', 'enum', 'extends', 'final',
+  'finally', 'float', 'for', 'goto', 'if', 'implements', 'import', 'instanceof', 'int',
+  'interface', 'long', 'native', 'new', 'package', 'private', 'protected', 'public',
+  'return', 'short', 'static', 'strictfp', 'super', 'switch', 'synchronized', 'this',
+  'throw', 'throws', 'transient', 'try', 'void', 'volatile', 'while', 'record', 'var'
+]);
+
+const JAVA_TYPES = new Set([
+  'String', 'Integer', 'Double', 'Float', 'Long', 'Boolean', 'Character', 'Byte', 'Short',
+  'Object', 'System', 'Scanner', 'Arrays', 'List', 'ArrayList', 'Map', 'HashMap',
+  'Set', 'HashSet', 'Collections', 'Math', 'StringBuilder', 'StringBuffer'
+]);
+
 /**
  * Tokenizes a single line of source code with bracket matching & colorization
  */
@@ -165,6 +180,10 @@ export function tokenizeLine(line: string, language: Language, bracketDepth = 0)
       if ((language === 'c' || language === 'cpp') && (CPP_KEYWORDS.has(ident) || CPP_KEYWORDS.has(lower))) {
         tokens.push({ type: 'keyword', value: ident });
       } else if ((language === 'c' || language === 'cpp') && CPP_TYPES.has(ident)) {
+        tokens.push({ type: 'type', value: ident });
+      } else if (language === 'java' && JAVA_KEYWORDS.has(ident)) {
+        tokens.push({ type: 'keyword', value: ident });
+      } else if (language === 'java' && JAVA_TYPES.has(ident)) {
         tokens.push({ type: 'type', value: ident });
       } else if (language === 'sql' && SQL_KEYWORDS.has(lower)) {
         tokens.push({ type: 'keyword', value: ident });

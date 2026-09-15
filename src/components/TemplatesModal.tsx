@@ -10,7 +10,9 @@ import {
   Layers, 
   Terminal, 
   Database,
-  Code2
+  Code2,
+  Zap,
+  Server
 } from 'lucide-react';
 
 interface TemplatesModalProps {
@@ -28,7 +30,7 @@ export const TemplatesModal: React.FC<TemplatesModalProps> = ({
 
   if (!isOpen) return null;
 
-  const categories = ['All', 'JavaScript', 'TypeScript', 'React', 'Web/HTML', 'Python', 'Data & SQL'];
+  const categories = ['All', 'FastAPI', 'Django', 'Python', 'Java', 'C / C++', 'JavaScript', 'TypeScript', 'React', 'Data & SQL', 'Web/HTML'];
 
   const filtered = selectedCategory === 'All' 
     ? STARTER_TEMPLATES 
@@ -36,6 +38,14 @@ export const TemplatesModal: React.FC<TemplatesModalProps> = ({
 
   const getTemplateIcon = (category: string) => {
     switch (category) {
+      case 'FastAPI':
+        return <Zap className="w-5 h-5 text-yellow-400" />;
+      case 'Django':
+        return <Server className="w-5 h-5 text-emerald-400" />;
+      case 'Java':
+        return <Code2 className="w-5 h-5 text-rose-400" />;
+      case 'C / C++':
+        return <Terminal className="w-5 h-5 text-blue-400" />;
       case 'JavaScript':
         return <FileCode className="w-5 h-5 text-yellow-300" />;
       case 'TypeScript':

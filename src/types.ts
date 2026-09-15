@@ -4,6 +4,7 @@ export type Language =
   | 'python' 
   | 'c'
   | 'cpp'
+  | 'java'
   | 'html' 
   | 'css' 
   | 'json' 
@@ -91,6 +92,13 @@ export interface ExecutionResult {
   status: 'idle' | 'running' | 'success' | 'error';
   memoryUsedMb?: number;
   rawStdout?: string;
+  rawStderr?: string;
+  exitCode?: number | null;
+  signal?: string | null;
+  compilerOutput?: string;
+  executionEngine?: string;
+  language?: string;
+  version?: string;
   affectedRows?: number;
   activeDatabase?: string;
   queryResults?: Array<{
@@ -127,7 +135,7 @@ export interface SQLDatabaseSchema {
   tables: Record<string, SQLTableSchema>;
 }
 
-export type ConsoleTab = 'console' | 'preview' | 'table' | 'stdin' | 'testcases' | 'charts' | 'database';
+export type ConsoleTab = 'console' | 'preview' | 'table' | 'stdin' | 'testcases' | 'charts' | 'database' | 'api-tester';
 
 export type EditorTheme = 
   | 'vs-dark' 
@@ -142,7 +150,7 @@ export interface ProjectTemplate {
   id: string;
   name: string;
   description: string;
-  category: 'C / C++' | 'JavaScript' | 'TypeScript' | 'React' | 'Python' | 'Web/HTML' | 'Data & SQL' | 'Competitive';
+  category: 'C / C++' | 'JavaScript' | 'TypeScript' | 'React' | 'Python' | 'Java' | 'FastAPI' | 'Django' | 'Web/HTML' | 'Data & SQL' | 'Competitive';
   icon: string;
   files: Array<{
     name: string;
@@ -160,6 +168,34 @@ export interface AutocompleteSuggestion {
   insertText: string;
   detail: string;
   kind: 'keyword' | 'function' | 'snippet' | 'variable' | 'property' | 'type';
+}
+
+export interface ConsoleSettings {
+  fontSize: number;
+  lineWrap: boolean;
+  showTimestamps: boolean;
+  autoScroll: boolean;
+  clearOnRun: boolean;
+}
+
+export interface ApiEndpoint {
+  id: string;
+  path: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  summary?: string;
+  framework?: 'fastapi' | 'django' | 'express' | 'flask';
+  params?: Array<{ name: string; in: 'path' | 'query' | 'header'; type: string; required?: boolean }>;
+  requestBodySample?: string;
+}
+
+export interface ApiResponse {
+  status: number;
+  statusText: string;
+  timeMs: number;
+  headers: Record<string, string>;
+  body: any;
+  rawText: string;
+  isError?: boolean;
 }
 
 export interface EditorSettings {

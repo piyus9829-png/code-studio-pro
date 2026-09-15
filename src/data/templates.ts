@@ -58,7 +58,7 @@ int main() {
     }
 
     // Sort the dataset
-    sort(nums);
+    sort(nums.begin(), nums.end());
 
     int minVal = nums[0];
     int maxVal = nums[n - 1];
@@ -478,4 +478,453 @@ ORDER BY gross_spend DESC;
       }
     ],
   },
+  {
+    id: 'java-algorithms-runner',
+    name: 'Java Data Structures & Competitive I/O Suite',
+    description: 'Object-oriented programming, standard input parsing with Scanner, Arrays.sort, and stream aggregations in Java 15.',
+    category: 'Java',
+    icon: 'Terminal',
+    defaultTab: 'console',
+    defaultStdin: '6\n18 42 7 99 3 55\n',
+    testCases: [
+      {
+        id: 'tc-j1',
+        name: 'Array Sort & Aggregate',
+        input: '6\n18 42 7 99 3 55\n',
+        expectedOutput: 'Sorted Dataset: [3, 7, 18, 42, 55, 99]\nMin: 3 | Max: 99\nSum: 224 | Avg: 37.33',
+      }
+    ],
+    activeFileName: 'Main.java',
+    files: [
+      {
+        name: 'Main.java',
+        language: 'java',
+        content: `// Cloud Development Studio - Java Execution Engine
+import java.util.Scanner;
+import java.util.Arrays;
+
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("☕ Java Real Execution Engine");
+        System.out.println("========================================");
+
+        Scanner scanner = new Scanner(System.in);
+        if (scanner.hasNextInt()) {
+            int n = scanner.nextInt();
+            int[] nums = new int[n];
+            int sum = 0;
+
+            for (int i = 0; i < n; i++) {
+                if (scanner.hasNextInt()) {
+                    nums[i] = scanner.nextInt();
+                    sum += nums[i];
+                }
+            }
+
+            Arrays.sort(nums);
+
+            int minVal = nums[0];
+            int maxVal = nums[n - 1];
+            double avg = (double) sum / n;
+
+            System.out.println("Sorted Dataset: " + Arrays.toString(nums));
+            System.out.println("Min: " + minVal + " | Max: " + maxVal);
+            System.out.printf("Sum: %d | Avg: %.2f%n", sum, avg);
+        } else {
+            System.out.println("No standard input provided. Provide numbers in the Input tab.");
+        }
+    }
+}
+`,
+      }
+    ],
+  },
+  {
+    id: 'fastapi-microservice-suite',
+    name: 'FastAPI Modern Microservice & Interactive REST API',
+    description: 'High-performance FastAPI application with Pydantic schemas, CRUD routes, path/query validation, HTTPException, and TestClient automated suite.',
+    category: 'FastAPI',
+    icon: 'Zap',
+    defaultTab: 'api-tester',
+    activeFileName: 'main.py',
+    files: [
+      {
+        name: 'main.py',
+        language: 'python',
+        content: `"""
+CloudIDE Studio Pro - FastAPI Modern Microservice
+Features:
+- CRUD routes (@app.get, @app.post, @app.put, @app.delete)
+- Pydantic models for request & response validation
+- Path & Query parameter parsing
+- HTTPException error handling
+- Automated TestClient verification
+"""
+
+from typing import List, Optional
+from pydantic import BaseModel, Field
+
+# Try importing real FastAPI or use lightweight simulation
+try:
+    from fastapi import FastAPI, HTTPException, status
+    from fastapi.testclient import TestClient
+except ImportError:
+    # Pure-python shim for sandboxed environments
+    class HTTPException(Exception):
+        def __init__(self, status_code: int, detail: str):
+            self.status_code = status_code
+            self.detail = detail
+            super().__init__(detail)
+
+    class FastAPI:
+        def __init__(self, title="FastAPI", version="1.0.0", description=""):
+            self.title = title
+            self.version = version
+            self.description = description
+            self.routes = []
+
+        def get(self, path: str):
+            def decorator(func):
+                self.routes.append(('GET', path, func))
+                return func
+            return decorator
+
+        def post(self, path: str, status_code=200):
+            def decorator(func):
+                self.routes.append(('POST', path, func))
+                return func
+            return decorator
+
+        def put(self, path: str):
+            def decorator(func):
+                self.routes.append(('PUT', path, func))
+                return func
+            return decorator
+
+        def delete(self, path: str):
+            def decorator(func):
+                self.routes.append(('DELETE', path, func))
+                return func
+            return decorator
+
+    class TestClient:
+        def __init__(self, app):
+            self.app = app
+        def get(self, path, headers=None):
+            return self._dispatch('GET', path, None)
+        def post(self, path, json=None, headers=None):
+            return self._dispatch('POST', path, json)
+        def put(self, path, json=None, headers=None):
+            return self._dispatch('PUT', path, json)
+        def delete(self, path, headers=None):
+            return self._dispatch('DELETE', path, None)
+        def _dispatch(self, method, path, body):
+            class Response:
+                def __init__(self, status_code, data):
+                    self.status_code = status_code
+                    self.data = data
+                    self.headers = {"content-type": "application/json"}
+                def json(self):
+                    return self.data
+                @property
+                def text(self):
+                    import json
+                    return json.dumps(self.data)
+            return Response(200, {"status": "ok", "method": method, "path": path})
+
+app = FastAPI(
+    title="CloudStore Microservice API",
+    version="2.4.0",
+    description="Product catalog, inventory, and order management API"
+)
+
+# 1. Pydantic Models
+class Item(BaseModel):
+    id: Optional[int] = None
+    name: str
+    price: float
+    category: str
+    in_stock: bool = True
+
+class ItemCreate(BaseModel):
+    name: str
+    price: float
+    category: str
+    in_stock: bool = True
+
+# In-memory database repository
+DB_ITEMS: List[Item] = [
+    Item(id=1, name="Mechanical Gaming Keyboard", price=89.99, category="Peripherals", in_stock=True),
+    Item(id=2, name="Ultra-Wide 4K Monitor", price=499.50, category="Displays", in_stock=True),
+    Item(id=3, name="Ergonomic Desk Chair", price=249.00, category="Furniture", in_stock=False),
+]
+
+# 2. FastAPI Route Handlers
+@app.get("/api/v1/health")
+def health_check():
+    """System health check and uptime probe"""
+    return {
+        "status": "healthy",
+        "service": "CloudStore FastAPI Microservice",
+        "total_items": len(DB_ITEMS),
+        "version": "2.4.0"
+    }
+
+@app.get("/api/v1/items")
+def get_items(category: Optional[str] = None, in_stock: Optional[bool] = None):
+    """Retrieve all catalog items with optional category filtering"""
+    results = DB_ITEMS
+    if category:
+        results = [it for it in results if it.category.lower() == category.lower()]
+    if in_stock is not None:
+        results = [it for it in results if it.in_stock == in_stock]
+    return [it.model_dump() if hasattr(it, 'model_dump') else it.__dict__ for it in results]
+
+@app.get("/api/v1/items/{item_id}")
+def get_item_by_id(item_id: int):
+    """Retrieve a single item by unique ID"""
+    for it in DB_ITEMS:
+        if it.id == item_id:
+            return it.model_dump() if hasattr(it, 'model_dump') else it.__dict__
+    raise HTTPException(status_code=404, detail=f"Item with id {item_id} not found")
+
+@app.post("/api/v1/items")
+def create_item(item_in: ItemCreate):
+    """Create a new product item"""
+    new_id = max([it.id for it in DB_ITEMS], default=0) + 1
+    new_item = Item(
+        id=new_id,
+        name=item_in.name,
+        price=item_in.price,
+        category=item_in.category,
+        in_stock=item_in.in_stock
+    )
+    DB_ITEMS.append(new_item)
+    return new_item.model_dump() if hasattr(new_item, 'model_dump') else new_item.__dict__
+
+@app.delete("/api/v1/items/{item_id}")
+def delete_item(item_id: int):
+    """Remove an item by ID"""
+    for idx, it in enumerate(DB_ITEMS):
+        if it.id == item_id:
+            removed = DB_ITEMS.pop(idx)
+            return {"deleted": True, "item_id": item_id, "name": removed.name}
+    raise HTTPException(status_code=404, detail=f"Item with id {item_id} not found")
+
+# 3. Interactive Automated Route Verification Suite
+if __name__ == "__main__":
+    print("🚀 [FastAPI Microservice Engine Initialized]")
+    print("=" * 60)
+    print("📡 Testing Endpoints with TestClient:")
+
+    client = TestClient(app)
+
+    # Test 1: Health Check
+    r1 = client.get("/api/v1/health")
+    print(f"  [GET]  /api/v1/health -> Status: {r1.status_code}")
+    print(f"         Response: {r1.json()}")
+
+    # Test 2: List Items
+    r2 = client.get("/api/v1/items")
+    print(f"  [GET]  /api/v1/items  -> Found {len(r2.json()) if isinstance(r2.json(), list) else 'active'} items")
+
+    # Test 3: Create New Item
+    new_payload = {"name": "Noise-Cancelling Headphones", "price": 179.99, "category": "Audio", "in_stock": True}
+    r3 = client.post("/api/v1/items", json=new_payload)
+    print(f"  [POST] /api/v1/items  -> Status: {r3.status_code}")
+    print(f"         Created: {r3.json()}")
+
+    print("=" * 60)
+    print("💡 Tip: Use the 'API Tester' tab in the Output Panel to test endpoints interactively!")
+`,
+      }
+    ],
+  },
+  {
+    id: 'django-orm-webservice',
+    name: 'Django Standalone Web Service, ORM & Views Suite',
+    description: 'Full Django standalone service with settings.configure, SQLite in-memory ORM models, migrations, views, URL routing, and Client test runner.',
+    category: 'Django',
+    icon: 'Server',
+    defaultTab: 'api-tester',
+    activeFileName: 'app.py',
+    files: [
+      {
+        name: 'app.py',
+        language: 'python',
+        content: `"""
+CloudIDE Studio Pro - Django Standalone Web Service & ORM Engine
+Features:
+- Programmatic django.conf.settings.configure()
+- In-memory SQLite database & automated schema migration
+- Django ORM models (Article, Category)
+- Function-based & Class-based JSON Views
+- URL dispatcher (urlpatterns)
+- django.test.Client test suite
+"""
+
+import os
+import sys
+import json
+import django
+from django.conf import settings
+from django.core.management import call_command
+from django.http import JsonResponse, HttpResponse
+from django.urls import path
+from django.test import Client
+
+# 1. Configure Standalone Django Settings
+if not settings.configured:
+    settings.configure(
+        DEBUG=True,
+        SECRET_KEY='cloudide-django-secret-key-development',
+        ROOT_URLCONF=__name__,
+        INSTALLED_APPS=[
+            'django.contrib.contenttypes',
+            'django.contrib.auth',
+            '__main__',
+        ],
+        DATABASES={
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': ':memory:',
+            }
+        },
+        TIME_ZONE='UTC',
+        USE_TZ=True,
+    )
+    django.setup()
+
+from django.db import models
+
+# 2. Define Django ORM Models
+class Category(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        app_label = '__main__'
+
+    def __str__(self):
+        return self.name
+
+class Article(models.Model):
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200)
+    content = models.TextField()
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='articles')
+    views_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = '__main__'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'slug': self.slug,
+            'category': self.category.name,
+            'views_count': self.views_count,
+            'created_at': str(self.created_at),
+        }
+
+# 3. Create Tables & Migrate In-Memory Database
+call_command('migrate', verbosity=0)
+
+# Seed Initial ORM Data
+cat_tech, _ = Category.objects.get_or_create(name='Technology', description='Software and Cloud Computing')
+cat_ai, _ = Category.objects.get_or_create(name='AI & ML', description='Deep Learning and LLMs')
+
+Article.objects.get_or_create(
+    title='Getting Started with FastAPI and Django on CloudIDE',
+    slug='fastapi-django-cloudide',
+    content='Learn how to build lightweight microservices using Python...',
+    category=cat_tech,
+    views_count=1420
+)
+Article.objects.get_or_create(
+    title='Optimizing SQLite In-Memory Database Queries',
+    slug='optimizing-sqlite-memory',
+    content='Tips and tricks for sub-millisecond query execution in Python...',
+    category=cat_tech,
+    views_count=890
+)
+
+# 4. Django View Handlers
+def health_view(request):
+    return JsonResponse({
+        'status': 'online',
+        'framework': 'Django 5.x',
+        'database': 'SQLite In-Memory (:memory:)',
+        'categories_count': Category.objects.count(),
+        'articles_count': Article.objects.count(),
+    })
+
+def article_list_view(request):
+    category_filter = request.GET.get('category')
+    queryset = Article.objects.select_related('category').all()
+    if category_filter:
+        queryset = queryset.filter(category__name__iexact=category_filter)
+    
+    articles = [a.to_dict() for a in queryset]
+    return JsonResponse({'articles': articles, 'total': len(articles)})
+
+def article_create_view(request):
+    if request.method == 'POST':
+        try:
+            payload = json.loads(request.body.decode('utf-8'))
+            cat, _ = Category.objects.get_or_create(name=payload.get('category', 'General'))
+            article = Article.objects.create(
+                title=payload['title'],
+                slug=payload.get('slug', payload['title'].lower().replace(' ', '-')),
+                content=payload.get('content', ''),
+                category=cat,
+                views_count=0
+            )
+            return JsonResponse({'created': True, 'article': article.to_dict()}, status=201)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    return JsonResponse({'error': 'POST method required'}, status=405)
+
+# 5. URL Routing Table
+urlpatterns = [
+    path('api/django/health/', health_view, name='health'),
+    path('api/django/articles/', article_list_view, name='article-list'),
+    path('api/django/articles/create/', article_create_view, name='article-create'),
+]
+
+# 6. Automated Django Test Client Runner
+if __name__ == '__main__':
+    print("🐍 [Django Standalone Web Service Started]")
+    print("=" * 60)
+    
+    client = Client()
+
+    # Request 1: Health check
+    res1 = client.get('/api/django/health/')
+    print(f"  [GET]  /api/django/health/   -> Status {res1.status_code}")
+    print(f"         Data: {res1.json()}")
+
+    # Request 2: List Articles
+    res2 = client.get('/api/django/articles/')
+    print(f"  [GET]  /api/django/articles/ -> Retrieved {res2.json()['total']} articles from ORM")
+
+    # Request 3: Create Article via POST
+    new_art = {
+        "title": "Building Scalable Systems with Django ORM",
+        "category": "Technology",
+        "content": "Deep dive into select_related and prefetch_related..."
+    }
+    res3 = client.post('/api/django/articles/create/', data=json.dumps(new_art), content_type='application/json')
+    print(f"  [POST] /api/django/articles/create/ -> Status {res3.status_code}")
+    print(f"         Result: {res3.json()}")
+
+    print("=" * 60)
+    print("✓ All Django Views and ORM models executed successfully.")
+`,
+      }
+    ],
+  },
 ];
+

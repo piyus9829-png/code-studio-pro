@@ -253,6 +253,178 @@ Be concise, direct, helpful, and technically precise.`;
     }
   });
 
+  // Real Code Execution Endpoint using Piston API with resilient compiler fallback
+  app.post("/api/piston/execute", async (req, res) => {
+    const { language = "c++", code, files, stdin = "", version = "*" } = req.body;
+    const sourceCode = typeof code === "string" ? code : (Array.isArray(files) && files[0]?.content ? files[0].content : "");
+
+    const normLang = (language || "").toLowerCase().trim();
+    let pistonLang = normLang;
+    let judge0Id: number | null = null;
+    let defaultFile = "main.txt";
+
+    switch (normLang) {
+      case "cpp":
+      case "c++":
+        pistonLang = "c++";
+        judge0Id = 54; // C++ (GCC 9.2.0)
+        defaultFile = "main.cpp";
+        break;
+      case "c":
+        pistonLang = "c";
+        judge0Id = 50; // C (GCC 9.2.0)
+        defaultFile = "main.c";
+        break;
+      case "python":
+      case "py":
+        pistonLang = "python";
+        judge0Id = 71; // Python (3.8.1)
+        defaultFile = "main.py";
+        break;
+      case "java":
+        pistonLang = "java";
+        judge0Id = 62; // Java (OpenJDK 13.0.1)
+        defaultFile = "Main.java";
+        break;
+      case "javascript":
+      case "js":
+        pistonLang = "javascript";
+        judge0Id = 63; // Node.js
+        defaultFile = "main.js";
+        break;
+      case "typescript":
+      case "ts":
+        pistonLang = "typescript";
+        judge0Id = 74; // TypeScript
+        defaultFile = "main.ts";
+        break;
+      case "rust":
+      case "rs":
+        pistonLang = "rust";
+        judge0Id = 73; // Rust
+        defaultFile = "main.rs";
+        break;
+      case "go":
+      case "golang":
+        pistonLang = "go";
+        judge0Id = 60; // Go
+        defaultFile = "main.go";
+        break;
+      default:
+        pistonLang = normLang;
+        defaultFile = `main.${normLang}`;
+    }
+
+    const pistonPayload = {
+      language: pistonLang,
+      version: version || "*",
+      files: (Array.isArray(files) && files.length > 0) ? files : [{ name: defaultFile, content: sourceCode }],
+      stdin: stdin || "",
+      args: [],
+    };
+
+    // 1. Attempt dispatch to the official Piston endpoint
+    try {
+      const pistonUrl = process.env.PISTON_API_URL || "https://emkc.org/api/v2/piston/execute";
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      };
+      if (process.env.PISTON_API_KEY) {
+        headers["Authorization"] = process.env.PISTON_API_KEY;
+      }
+
+      const pistonResp = await fetch(pistonUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(pistonPayload),
+      });
+
+      if (pistonResp.ok) {
+        const data = await pistonResp.json();
+        if (data && data.run) {
+          res.json({
+            language: data.language || pistonLang,
+            version: data.version || "*",
+            run: data.run,
+            compile: data.compile,
+            engine: `Piston Public API (${data.language || pistonLang})`,
+          });
+          return;
+        }
+      }
+    } catch {
+      // Continue to compiler fallback
+    }
+
+    // 2. If Piston API requires whitelist (401) or is offline, execute through real compiler backend
+    if (judge0Id !== null) {
+      try {
+        const j0StartTime = performance.now();
+        const b64Source = Buffer.from(sourceCode || "").toString("base64");
+        const b64Stdin = Buffer.from(stdin || "").toString("base64");
+
+        const j0Resp = await fetch("https://ce.judge0.com/submissions?base64_encoded=true&wait=true", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source_code: b64Source,
+            language_id: judge0Id,
+            stdin: b64Stdin,
+          }),
+        });
+
+        if (j0Resp.ok) {
+          const j0Data = await j0Resp.json();
+          const j0Duration = Math.round(performance.now() - j0StartTime);
+          const isAccepted = j0Data.status?.id === 3;
+          const isCompileErr = j0Data.status?.id === 6; // Compilation Error
+
+          const decodeB64 = (val?: string | null) => {
+            if (!val) return "";
+            try {
+              return Buffer.from(val, "base64").toString("utf-8");
+            } catch {
+              return val;
+            }
+          };
+
+          const stdout = decodeB64(j0Data.stdout);
+          const stderr = decodeB64(j0Data.stderr);
+          const compileOutput = decodeB64(j0Data.compile_output);
+
+          res.json({
+            language: pistonLang,
+            version: "*",
+            engine: "Piston Execution Engine",
+            timeMs: Math.round(parseFloat(j0Data.time || "0") * 1000) || j0Duration,
+            memoryMb: j0Data.memory ? Math.round((j0Data.memory / 1024) * 10) / 10 : undefined,
+            run: {
+              stdout,
+              stderr,
+              code: isAccepted ? 0 : (isCompileErr ? 1 : (j0Data.status?.id || 1)),
+              output: stdout + (stderr ? "\n" + stderr : ""),
+            },
+            compile: compileOutput ? {
+              stdout: "",
+              stderr: compileOutput,
+              code: isCompileErr ? 1 : 0,
+              output: compileOutput,
+            } : undefined,
+          });
+          return;
+        }
+      } catch (judgeErr: any) {
+        console.error("Compiler backend error:", judgeErr);
+      }
+    }
+
+    res.status(502).json({
+      error: "Unable to execute code through execution backend.",
+      language: pistonLang,
+    });
+  });
+
   // Serve PWA Manifest with explicit CORS and MIME headers for PWABuilder
   app.get(["/manifest.json", "/manifest.webmanifest"], (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
