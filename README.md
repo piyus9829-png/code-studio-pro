@@ -50,7 +50,7 @@ Contributions, issues, and feature requests are welcome! Feel free to check the 
 ## 📝 Author
 
 **Piyush Agarwal**
-*   LinkedIn: [[](https://www.linkedin.com/in/piyush-agarwal-b7529441b )]
+*   LinkedIn: [https://www.linkedin.com/in/piyush-agarwal-b7529441b )]
 * 
 
 *Show your support by leaving a ⭐ if you find this project useful!*
