@@ -10,7 +10,12 @@ import {
   Terminal, 
   CheckCircle2, 
   Search,
-  Palette
+  Palette,
+  Layers,
+  MousePointerClick,
+  GitCompare,
+  BookmarkCheck,
+  RotateCcw
 } from 'lucide-react';
 import { EditorTheme, Language } from '../types';
 
@@ -25,6 +30,11 @@ interface CommandPaletteProps {
   onSelectTheme: (theme: EditorTheme) => void;
   onSelectLanguage: (lang: Language) => void;
   onExport: () => void;
+  onSaveWorkspace?: () => void;
+  onResetWorkspace?: () => void;
+  onToggleDiffMode?: () => void;
+  onRestoreCheckpoint?: () => void;
+  onUpdateCheckpoint?: () => void;
 }
 
 interface CommandItem {
@@ -47,12 +57,47 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onSelectTheme,
   onSelectLanguage,
   onExport,
+  onSaveWorkspace,
+  onResetWorkspace,
+  onToggleDiffMode,
+  onRestoreCheckpoint,
+  onUpdateCheckpoint,
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands: CommandItem[] = [
+    {
+      id: 'toggle-diff-viewer',
+      title: 'Diff: Toggle Diff Viewer Mode (Compare against Checkpoint)',
+      category: 'Diff & Versioning',
+      shortcut: '⌥D',
+      icon: <GitCompare className="w-4 h-4 text-indigo-400" />,
+      action: () => { if (onToggleDiffMode) onToggleDiffMode(); onClose(); }
+    },
+    {
+      id: 'save-checkpoint',
+      title: 'Diff: Save New Checkpoint Snapshot for Active File',
+      category: 'Diff & Versioning',
+      icon: <BookmarkCheck className="w-4 h-4 text-emerald-400" />,
+      action: () => { if (onUpdateCheckpoint) onUpdateCheckpoint(); onClose(); }
+    },
+    {
+      id: 'restore-checkpoint',
+      title: 'Diff: Revert / Restore Active File to Last Checkpoint',
+      category: 'Diff & Versioning',
+      icon: <RotateCcw className="w-4 h-4 text-rose-400" />,
+      action: () => { if (onRestoreCheckpoint) onRestoreCheckpoint(); onClose(); }
+    },
+    {
+      id: 'save-workspace',
+      title: 'File: Save All Files to Local Storage',
+      category: 'File',
+      shortcut: '⌃S / ⌘S',
+      icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" />,
+      action: () => { if (onSaveWorkspace) onSaveWorkspace(); onClose(); }
+    },
     {
       id: 'run-code',
       title: 'Run: Execute Active Script / Program',
@@ -70,6 +115,29 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       action: () => { onFormatCode(); onClose(); }
     },
     {
+      id: 'multi-cursor-next',
+      title: 'Multi-Cursor: Add Next Occurrence of Selection / Word',
+      category: 'Multi-Cursor',
+      shortcut: '⌃D',
+      icon: <Layers className="w-4 h-4 text-indigo-400" />,
+      action: () => { onClose(); }
+    },
+    {
+      id: 'multi-cursor-all',
+      title: 'Multi-Cursor: Select All Occurrences',
+      category: 'Multi-Cursor',
+      shortcut: '⌃⇧L',
+      icon: <MousePointerClick className="w-4 h-4 text-indigo-400" />,
+      action: () => { onClose(); }
+    },
+    {
+      id: 'toggle-codelens',
+      title: 'View: Toggle CodeLens References & Run Buttons',
+      category: 'View',
+      icon: <Layers className="w-4 h-4 text-emerald-400" />,
+      action: () => { onClose(); }
+    },
+    {
       id: 'ai-copilot',
       title: 'Gemini AI Copilot: Open Assistant',
       category: 'AI Tools',
@@ -83,6 +151,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       category: 'Workspace',
       icon: <FileCode className="w-4 h-4 text-amber-400" />,
       action: () => { onOpenTemplates(); onClose(); }
+    },
+    {
+      id: 'reset-workspace',
+      title: 'Workspace: Reset to Default Starter Template',
+      category: 'Workspace',
+      icon: <Trash2 className="w-4 h-4 text-rose-400" />,
+      action: () => { if (onResetWorkspace) onResetWorkspace(); onClose(); }
     },
     {
       id: 'clear-console',

@@ -71,7 +71,24 @@ export function mapLanguageToPiston(lang: Language | string): {
       return { pistonLang: 'javascript', fileName: 'main.js', version: '*', displayName: 'Node.js' };
     case 'typescript':
     case 'ts':
-      return { pistonLang: 'typescript', fileName: 'main.ts', version: '*', displayName: 'TypeScript' };
+      return { pistonLang: 'typescript', fileName: 'main.ts', version: '*', displayName: 'TypeScript (Bun/Node)' };
+    case 'go':
+    case 'golang':
+      return { pistonLang: 'go', fileName: 'main.go', version: '*', displayName: 'Go (Golang)' };
+    case 'rust':
+    case 'rs':
+      return { pistonLang: 'rust', fileName: 'main.rs', version: '*', displayName: 'Rust (rustc)' };
+    case 'php':
+      return { pistonLang: 'php', fileName: 'main.php', version: '*', displayName: 'PHP 8.2' };
+    case 'ruby':
+    case 'rb':
+      return { pistonLang: 'ruby', fileName: 'main.rb', version: '*', displayName: 'Ruby 3.2' };
+    case 'swift':
+      return { pistonLang: 'swift', fileName: 'main.swift', version: '*', displayName: 'Swift 5.8' };
+    case 'bash':
+    case 'sh':
+    case 'shell':
+      return { pistonLang: 'bash', fileName: 'main.sh', version: '*', displayName: 'Bash Shell' };
     default:
       return { pistonLang: normalized, fileName: `main.${normalized}`, version: '*', displayName: normalized.toUpperCase() };
   }
@@ -110,33 +127,37 @@ export async function executeWithPiston(
   let usedEngine = 'Piston Public API';
 
   try {
-    // 1. Send POST request directly to the public Piston API
+    // For Python, directly utilize the backend execution engine with pre-installed Django environment
+    const isPython = langConfig.pistonLang === 'python';
+
     let res: Response | null = null;
     let directSuccess = false;
 
-    try {
-      res = await fetch(PISTON_PUBLIC_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+    if (!isPython) {
+      // 1. Send POST request directly to the public Piston API for other languages
+      try {
+        res = await fetch(PISTON_PUBLIC_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
 
-      if (res.ok) {
-        responseData = await res.json();
-        if (responseData && responseData.run) {
-          directSuccess = true;
-          usedEngine = `Piston API (${responseData.language || langConfig.pistonLang} ${responseData.version || ''})`.trim();
+        if (res.ok) {
+          responseData = await res.json();
+          if (responseData && responseData.run) {
+            directSuccess = true;
+            usedEngine = `Piston API (${responseData.language || langConfig.pistonLang} ${responseData.version || ''})`.trim();
+          }
         }
+      } catch {
+        // Network or CORS issue with direct endpoint, proceed to server execution proxy
       }
-    } catch {
-      // Network or CORS issue with direct endpoint, proceed to server execution proxy
     }
 
-    // 2. If direct public Piston API is unavailable or returns 401 whitelist requirement,
-    // proxy via /api/piston/execute which executes through the real compiler backend
+    // 2. Execute via /api/piston/execute (supports native Python with Django, FastAPI & Uvicorn pre-installed and compiler backend)
     if (!directSuccess) {
       const proxyRes = await fetch('/api/piston/execute', {
         method: 'POST',
@@ -153,7 +174,7 @@ export async function executeWithPiston(
       }
 
       responseData = await proxyRes.json();
-      usedEngine = responseData?.engine || 'Piston Real Execution Backend';
+      usedEngine = responseData?.engine || (isPython ? 'Python 3 Engine (Django, FastAPI & Uvicorn Pre-installed)' : 'Piston Real Execution Backend');
     }
   } catch (err: any) {
     const execTime = Math.round(performance.now() - startTime);

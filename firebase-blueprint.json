@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "UserProfile": {
+      "collection": "users",
+      "fields": {
+        "uid": { "type": "string", "required": true },
+        "email": { "type": "string", "required": true },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "provider": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "createdAt": { "type": "string" },
+        "lastLogin": { "type": "string" },
+        "storageUsedKb": { "type": "number" },
+        "projectsCount": { "type": "number" }
+      }
+    },
+    "CloudProject": {
+      "collection": "projects",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "ownerId": { "type": "string", "required": true },
+        "ownerEmail": { "type": "string" },
+        "name": { "type": "string", "required": true },
+        "language": { "type": "string", "required": true },
+        "files": { "type": "array" },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "SecurityLog": {
+      "collection": "security_logs",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "timestamp": { "type": "string", "required": true },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "eventType": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "threatLevel": { "type": "string", "enum": ["info", "warning", "critical"] },
+        "details": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "SystemProtectionConfig": {
+      "collection": "system_config",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "maintenanceMode": { "type": "boolean" },
+        "emergencyLockdown": { "type": "boolean" },
+        "rateLimitPerMinute": { "type": "number" },
+        "allowedProviders": { "type": "array" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      }
+    }
+  }
+}

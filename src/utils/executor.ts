@@ -2,8 +2,9 @@ import { ConsoleLogEntry, ExecutionResult, Language, TestCase, ApiResponse } fro
 import { executeWithPiston } from './pistonService';
 import { executePythonScript } from './pythonRuntime';
 import { executeSQLScript, getAllDatabases, getActiveDatabase, setActiveDatabaseName, resetAllDatabases } from './sqlRuntime';
+import { runCode } from './runCode';
 
-export { getAllDatabases, getActiveDatabase, setActiveDatabaseName, resetAllDatabases };
+export { getAllDatabases, getActiveDatabase, setActiveDatabaseName, resetAllDatabases, runCode };
 
 let logCounter = 0;
 

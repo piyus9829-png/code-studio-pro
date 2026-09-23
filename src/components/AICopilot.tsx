@@ -13,9 +13,11 @@ import {
   TestTube2, 
   ArrowRightLeft,
   X,
-  Loader2
+  Loader2,
+  Crown
 } from 'lucide-react';
 import { FileItem } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface AICopilotProps {
   activeFile: FileItem;
@@ -36,6 +38,7 @@ export const AICopilot: React.FC<AICopilotProps> = ({
   onApplyCode,
   onClose,
 }) => {
+  const { isPremium, requirePremium, setAuthModalOpen } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -48,7 +51,7 @@ export const AICopilot: React.FC<AICopilotProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const handleAction = async (action: 'explain' | 'fix' | 'optimize' | 'test' | 'convert', userPromptText?: string) => {
+  const executeAiAction = async (action: 'explain' | 'fix' | 'optimize' | 'test' | 'convert', userPromptText?: string) => {
     if (isLoading) return;
 
     const userMessageId = `usr_${Date.now()}`;
@@ -108,6 +111,12 @@ export const AICopilot: React.FC<AICopilotProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAction = (action: 'explain' | 'fix' | 'optimize' | 'test' | 'convert', userPromptText?: string) => {
+    requirePremium('AI Code Explain', () => {
+      executeAiAction(action, userPromptText);
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {

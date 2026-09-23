@@ -15,12 +15,28 @@ export default defineConfig(() => {
         manifest: false,
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024, // 8 MiB limit to allow bundled chunks
         },
       }),
     ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+      },
+    },
+    build: {
+      target: 'esnext',
+      cssCodeSplit: true,
+      sourcemap: false,
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-motion': ['motion'],
+            'vendor-icons': ['lucide-react'],
+          },
+        },
       },
     },
     server: {

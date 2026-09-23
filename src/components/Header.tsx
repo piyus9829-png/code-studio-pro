@@ -14,10 +14,16 @@ import {
   Terminal,
   FileInput,
   Globe,
-  Menu
+  Menu,
+  SplitSquareHorizontal,
+  SplitSquareVertical,
+  ExternalLink,
+  Columns
 } from 'lucide-react';
-import { Language, ExecutionResult, ConsoleTab } from '../types';
+import { Language, ExecutionResult, ConsoleTab, EditorSplitDirection } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
+import { AutoSaveIndicator } from './AutoSaveIndicator';
+import { AuthUserMenu } from './AuthUserMenu';
 
 interface HeaderProps {
   onRun: () => void;
@@ -41,6 +47,16 @@ interface HeaderProps {
   onToggleOutputPanel?: () => void;
   onToggleSidebar?: () => void;
   isSidebarOpen?: boolean;
+  editorSplit?: EditorSplitDirection;
+  onToggleEditorSplit?: (split: EditorSplitDirection) => void;
+  onPopOutOutput?: () => void;
+  lastSaved?: number;
+  isAutoSaving?: boolean;
+  hasUnsavedChanges?: boolean;
+  autoSaveEnabled?: boolean;
+  onToggleAutoSave?: (enabled: boolean) => void;
+  onManualSave?: () => void;
+  onResetWorkspace?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -65,6 +81,16 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleOutputPanel,
   onToggleSidebar,
   isSidebarOpen,
+  editorSplit = 'none',
+  onToggleEditorSplit,
+  onPopOutOutput,
+  lastSaved = Date.now(),
+  isAutoSaving = false,
+  hasUnsavedChanges = false,
+  autoSaveEnabled = true,
+  onToggleAutoSave = () => {},
+  onManualSave = () => {},
+  onResetWorkspace,
 }) => {
   const getLanguageBadge = (lang: Language) => {
     switch (lang) {
@@ -214,6 +240,30 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden md:inline">AI Copilot</span>
         </button>
 
+        {/* Multi-Window & Split Editor Switcher */}
+        {onToggleEditorSplit && (
+          <div className="hidden md:flex items-center bg-slate-950/80 rounded-lg p-0.5 border border-slate-800">
+            <button
+              onClick={() => onToggleEditorSplit(editorSplit === 'horizontal' ? 'none' : 'horizontal')}
+              className={`p-1 rounded text-xs transition-colors cursor-pointer ${
+                editorSplit === 'horizontal' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Split Editor Side-by-Side (Horizontal)"
+            >
+              <SplitSquareHorizontal className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onToggleEditorSplit(editorSplit === 'vertical' ? 'none' : 'vertical')}
+              className={`p-1 rounded text-xs transition-colors cursor-pointer ${
+                editorSplit === 'vertical' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Split Editor Stacked (Vertical)"
+            >
+              <SplitSquareVertical className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Layout Mode Switcher */}
         <div className="hidden sm:flex items-center bg-slate-950/80 rounded-lg p-0.5 border border-slate-800">
           <button
@@ -221,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
             className={`p-1 rounded text-xs transition-colors cursor-pointer ${
               layoutMode === 'split-horizontal' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'
             }`}
-            title="Split Horizontal (Side by Side)"
+            title="Split Horizontal (Editor Left / Output Right)"
           >
             <Layout className="w-3.5 h-3.5" />
           </button>
@@ -230,7 +280,7 @@ export const Header: React.FC<HeaderProps> = ({
             className={`p-1 rounded text-xs transition-colors cursor-pointer ${
               layoutMode === 'split-vertical' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'
             }`}
-            title="Split Vertical (Top / Bottom)"
+            title="Split Vertical (Editor Top / Output Bottom)"
           >
             <div className="w-3.5 h-3.5 border border-current rounded-xs flex flex-col justify-between p-0.5">
               <div className="h-1 bg-current w-full"></div>
@@ -248,10 +298,33 @@ export const Header: React.FC<HeaderProps> = ({
               <Terminal className="w-3.5 h-3.5" />
             </button>
           )}
+          {onPopOutOutput && (
+            <button
+              onClick={onPopOutOutput}
+              className="p-1 rounded text-xs text-slate-500 hover:text-indigo-300 hover:bg-slate-800/60 transition-colors cursor-pointer"
+              title="Pop-out Output Console into Detached Window"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
+
+        {/* LocalStorage AutoSave Indicator */}
+        <AutoSaveIndicator
+          lastSaved={lastSaved}
+          isSaving={isAutoSaving}
+          hasUnsavedChanges={hasUnsavedChanges}
+          autoSaveEnabled={autoSaveEnabled}
+          onToggleAutoSave={onToggleAutoSave}
+          onManualSave={onManualSave}
+          onResetWorkspace={onResetWorkspace}
+        />
 
         {/* PWA Install Button */}
         <PWAInstallButton variant="header" />
+
+        {/* User Authentication & Protection Platform Menu */}
+        <AuthUserMenu />
 
         {/* Settings Button */}
         <button

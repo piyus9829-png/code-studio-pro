@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'tarun98293@gmail.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        isOwner(userId) || isAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) || isAdmin())) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+      
+      // User nested collections (projects, history, settings)
+      match /{allSubcollections=**} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Projects / CloudIDE Workspaces
+    match /projects/{projectId} {
+      allow read: if isAuthenticated() && (
+        resource == null ||
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.isPublic == true ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // Payment transaction audit records
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Protection platform security and audit logs
+    match /security_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Protection platform system settings & firewall rules
+    match /system_config/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}

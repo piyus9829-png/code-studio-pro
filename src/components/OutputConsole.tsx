@@ -6,13 +6,16 @@ import {
   TestCase,
   Language,
   ConsoleSettings,
-  ApiResponse 
+  ApiResponse,
+  TerminalTheme 
 } from '../types';
 import { evaluateReplExpression } from '../utils/executor';
+import { AnsiText, stripAnsi } from '../utils/ansi';
 import { ChartPlotViewer } from './ChartPlotViewer';
 import { DatabaseExplorer } from './DatabaseExplorer';
 import { VSCodeSQLViewer } from './VSCodeSQLViewer';
 import { ApiExplorer } from './ApiExplorer';
+import { getTerminalThemeConfig, TERMINAL_THEMES, TerminalThemeDefinition } from '../utils/terminalThemes';
 import { 
   Terminal as TerminalIcon, 
   Eye, 
@@ -42,7 +45,9 @@ import {
   Sliders,
   Zap,
   Settings as SettingsIcon,
-  Minus
+  Minus,
+  ExternalLink,
+  Palette
 } from 'lucide-react';
 
 interface OutputConsoleProps {
@@ -62,12 +67,15 @@ interface OutputConsoleProps {
   onDeleteTestCase: (id: string) => void;
   activeLanguage: Language;
   onInsertCodeSnippet?: (snippet: string) => void;
+  terminalTheme?: TerminalTheme;
+  onUpdateTerminalTheme?: (theme: TerminalTheme) => void;
   // Panel minimize / maximize / close controls
   isMinimized?: boolean;
   onToggleMinimize?: () => void;
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
   onClose?: () => void;
+  onPopOut?: () => void;
   activeCode?: string;
   onExecuteApiRequest?: (method: string, path: string, headers: Record<string, string>, body: string) => Promise<ApiResponse>;
 }
@@ -88,11 +96,14 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
   onDeleteTestCase,
   activeLanguage,
   onInsertCodeSnippet,
+  terminalTheme,
+  onUpdateTerminalTheme,
   isMinimized = false,
   onToggleMinimize,
   isMaximized = false,
   onToggleMaximize,
   onClose,
+  onPopOut,
   activeCode = '',
   onExecuteApiRequest,
 }) => {
@@ -114,8 +125,19 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
       showTimestamps: false,
       autoScroll: true,
       clearOnRun: false,
+      theme: 'default-dark',
     };
   });
+
+  const activeThemeId: TerminalTheme = terminalTheme || consoleSettings.theme || 'default-dark';
+  const tConfig = getTerminalThemeConfig(activeThemeId);
+
+  const handleSelectTheme = (newTheme: TerminalTheme) => {
+    setConsoleSettings(s => ({ ...s, theme: newTheme }));
+    if (onUpdateTerminalTheme) {
+      onUpdateTerminalTheme(newTheme);
+    }
+  };
 
   const consoleBottomRef = useRef<HTMLDivElement>(null);
 
@@ -147,7 +169,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
   const handleCopyLogs = () => {
     if (!executionResult?.logs) return;
     const text = executionResult.logs
-      .map(l => `[${l.type.toUpperCase()}] ${l.args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`)
+      .map(l => `[${l.type.toUpperCase()}] ${stripAnsi(l.args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '))}`)
       .join('\n');
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -158,7 +180,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
     if (filterType !== 'all' && log.type !== filterType) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const content = log.args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ').toLowerCase();
+      const content = stripAnsi(log.args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')).toLowerCase();
       return content.includes(q);
     }
     return true;
@@ -171,7 +193,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
   // 1. Minimized State Dock View
   if (isMinimized) {
     return (
-      <div className="h-9 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-3 shrink-0 select-none text-xs font-sans">
+      <div className={`h-9 ${tConfig.headerBg} border-t ${tConfig.borderColor} flex items-center justify-between px-3 shrink-0 select-none text-xs font-sans`}>
         <div className="flex items-center gap-2">
           <button
             onClick={onToggleMinimize}
@@ -186,17 +208,17 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
           {executionResult && (
             <div className="flex items-center gap-1.5 font-mono text-[11px]">
               {executionResult.status === 'success' ? (
-                <span className="px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 flex items-center gap-1">
+                <span className={`px-2 py-0.2 rounded-full font-bold border flex items-center gap-1 ${tConfig.statusBadgeSuccess}`}>
                   <Check className="w-3 h-3" />
                   Exit 0
                 </span>
               ) : (
-                <span className="px-2 py-0.2 rounded-full bg-red-500/20 text-red-300 font-bold border border-red-500/30 flex items-center gap-1">
+                <span className={`px-2 py-0.2 rounded-full font-bold border flex items-center gap-1 ${tConfig.statusBadgeError}`}>
                   <AlertCircle className="w-3 h-3" />
                   Exit {executionResult.exitCode ?? 1}
                 </span>
               )}
-              <span className="text-slate-500 hidden sm:inline">{executionResult.executionTimeMs}ms</span>
+              <span className={`${tConfig.dimTextColor} hidden sm:inline`}>{executionResult.executionTimeMs}ms</span>
             </div>
           )}
         </div>
@@ -208,7 +230,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
               onChangeTab('console');
               if (onToggleMinimize) onToggleMinimize();
             }}
-            className="px-2 py-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-[11px]"
+            className="px-2 py-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-[11px] cursor-pointer"
           >
             Logs ({filteredLogs.length})
           </button>
@@ -217,7 +239,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
               onChangeTab('stdin');
               if (onToggleMinimize) onToggleMinimize();
             }}
-            className="px-2 py-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-[11px]"
+            className="px-2 py-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-[11px] cursor-pointer"
           >
             Input
           </button>
@@ -226,14 +248,14 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
               onChangeTab('api-tester');
               if (onToggleMinimize) onToggleMinimize();
             }}
-            className="px-2 py-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-[11px] hidden sm:inline"
+            className="px-2 py-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-[11px] hidden sm:inline cursor-pointer"
           >
             API Tester
           </button>
 
           <button
             onClick={onToggleMinimize}
-            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white ml-1"
+            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white ml-1 cursor-pointer"
             title="Expand Panel"
           >
             <ChevronUp className="w-3.5 h-3.5" />
@@ -241,7 +263,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-red-400 transition-colors"
+              className="p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
               title="Close Output Panel"
             >
               <X className="w-3.5 h-3.5" />
@@ -254,17 +276,15 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
 
   // 2. Full Expanded Output Panel
   return (
-    <div className="h-full flex flex-col bg-slate-900 border-t sm:border-t-0 sm:border-l border-slate-800 select-text overflow-hidden">
+    <div className={`h-full flex flex-col ${tConfig.containerBg} ${tConfig.textColor} border-t sm:border-t-0 sm:border-l ${tConfig.borderColor} select-text overflow-hidden transition-colors`}>
       {/* Console Navigation Bar */}
-      <div className="h-10 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-3 shrink-0 select-none overflow-x-auto gap-2">
+      <div className={`h-10 ${tConfig.headerBg} border-b ${tConfig.borderColor} flex items-center justify-between px-3 shrink-0 select-none overflow-x-auto gap-2 transition-colors`}>
         <div className="flex items-center gap-1 shrink-0 overflow-x-auto">
           {/* Console Tab */}
           <button
             onClick={() => onChangeTab('console')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-              activeTab === 'console'
-                ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === 'console' ? tConfig.tabActive : tConfig.tabInactive
             }`}
           >
             <TerminalIcon className="w-3.5 h-3.5 text-indigo-400" />
@@ -280,9 +300,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
           <button
             onClick={() => onChangeTab('stdin')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-              activeTab === 'stdin'
-                ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === 'stdin' ? tConfig.tabActive : tConfig.tabInactive
             }`}
           >
             <FileInput className="w-3.5 h-3.5 text-amber-400" />
@@ -296,23 +314,19 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
           <button
             onClick={() => onChangeTab('testcases')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-              activeTab === 'testcases'
-                ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === 'testcases' ? tConfig.tabActive : tConfig.tabInactive
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             <span>Test Cases</span>
-            <span className="text-[10px] text-slate-500 font-mono">({testCases.length})</span>
+            <span className="text-[10px] opacity-70 font-mono">({testCases.length})</span>
           </button>
 
           {/* FastAPI & Django API Tester Tab */}
           <button
             onClick={() => onChangeTab('api-tester')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-              activeTab === 'api-tester'
-                ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === 'api-tester' ? tConfig.tabActive : tConfig.tabInactive
             }`}
           >
             <Zap className="w-3.5 h-3.5 text-yellow-400" />
@@ -324,9 +338,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
             <button
               onClick={() => onChangeTab('preview')}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                activeTab === 'preview'
-                  ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                activeTab === 'preview' ? tConfig.tabActive : tConfig.tabInactive
               }`}
             >
               <Eye className="w-3.5 h-3.5 text-cyan-400" />
@@ -339,9 +351,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
             <button
               onClick={() => onChangeTab('table')}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                activeTab === 'table'
-                  ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                activeTab === 'table' ? tConfig.tabActive : tConfig.tabInactive
               }`}
             >
               <TableIcon className="w-3.5 h-3.5 text-emerald-400" />
@@ -354,9 +364,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
             <button
               onClick={() => onChangeTab('charts')}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                activeTab === 'charts'
-                  ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                activeTab === 'charts' ? tConfig.tabActive : tConfig.tabInactive
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
@@ -369,9 +377,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
             <button
               onClick={() => onChangeTab('database')}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                activeTab === 'database'
-                  ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                activeTab === 'database' ? tConfig.tabActive : tConfig.tabInactive
               }`}
             >
               <Database className="w-3.5 h-3.5 text-indigo-400" />
@@ -391,13 +397,13 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
                   placeholder="Filter logs..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-slate-950/80 border border-slate-800 rounded-md pl-6 pr-2 py-0.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 w-24"
+                  className="bg-black/30 border border-slate-700/60 rounded-md pl-6 pr-2 py-0.5 text-xs text-inherit placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-24"
                 />
               </div>
 
               <button
                 onClick={handleCopyLogs}
-                className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                className="p-1.5 rounded-md hover:bg-black/20 text-slate-400 hover:text-inherit transition-colors cursor-pointer"
                 title="Copy all output"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -405,7 +411,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
 
               <button
                 onClick={onClear}
-                className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                className="p-1.5 rounded-md hover:bg-black/20 text-slate-400 hover:text-inherit transition-colors cursor-pointer"
                 title="Clear console"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -417,26 +423,64 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
           <div className="relative">
             <button
               onClick={() => setIsConsoleSettingsOpen(prev => !prev)}
-              className={`p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer ${
-                isConsoleSettingsOpen ? 'bg-slate-800 text-indigo-400' : ''
+              className={`p-1.5 rounded-md text-slate-400 hover:text-inherit hover:bg-black/20 transition-colors cursor-pointer ${
+                isConsoleSettingsOpen ? 'bg-black/30 text-indigo-400' : ''
               }`}
-              title="Output & Console Preferences"
+              title="Terminal Theme & Preferences"
             >
               <Sliders className="w-3.5 h-3.5" />
             </button>
 
             {/* Popover Settings Dropdown */}
             {isConsoleSettingsOpen && (
-              <div className="absolute right-0 top-full mt-1 w-64 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-3 z-50 text-xs font-sans space-y-2.5">
+              <div className="absolute right-0 top-full mt-1 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-3.5 z-50 text-xs font-sans space-y-3">
                 <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-                  <span className="font-semibold text-slate-200">Console Customization</span>
+                  <div className="flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="font-semibold text-slate-100">Terminal Preferences</span>
+                  </div>
                   <button
                     onClick={() => setIsConsoleSettingsOpen(false)}
-                    className="text-slate-500 hover:text-slate-300"
+                    className="text-slate-400 hover:text-slate-200 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
+
+                {/* Quick Terminal Theme Switcher */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-slate-400 font-medium flex items-center gap-1">
+                      <Palette className="w-3 h-3 text-indigo-400" />
+                      <span>Terminal Theme</span>
+                    </label>
+                    <span className="text-[10px] font-mono text-indigo-300">
+                      {tConfig.name.split(' ')[0]}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 max-h-36 overflow-y-auto pr-0.5 custom-scrollbar">
+                    {Object.values(TERMINAL_THEMES).map(theme => (
+                      <button
+                        key={theme.id}
+                        onClick={() => handleSelectTheme(theme.id)}
+                        className={`p-1.5 rounded-lg border text-left cursor-pointer transition-all flex flex-col justify-between text-[10px] ${
+                          activeThemeId === theme.id
+                            ? 'border-indigo-500 ring-1 ring-indigo-500/50 bg-slate-800 font-bold'
+                            : 'border-slate-800 hover:border-slate-700 bg-slate-950'
+                        }`}
+                        style={{ borderLeftColor: theme.preview.accent, borderLeftWidth: '3px' }}
+                      >
+                        <span className="truncate text-slate-200 font-medium">{theme.name.replace(' (Default)', '').replace(' (Green)', '')}</span>
+                        <div className="flex items-center gap-1 mt-1">
+                          <div className="w-2.5 h-2.5 rounded-full border border-black/30 shrink-0" style={{ backgroundColor: theme.preview.bg }} />
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: theme.preview.prompt }} />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="h-px bg-slate-800" />
 
                 {/* Font Size */}
                 <div className="flex items-center justify-between">
@@ -507,11 +551,22 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
 
           <div className="h-4 w-px bg-slate-800 mx-0.5" />
 
+          {/* Pop-out to Floating Window Button */}
+          {onPopOut && (
+            <button
+              onClick={onPopOut}
+              className="p-1.5 rounded-md hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-300 transition-colors cursor-pointer"
+              title="Pop-out Console into Detached Window"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Minimize Button */}
           {onToggleMinimize && (
             <button
               onClick={onToggleMinimize}
-              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-black/20 text-slate-400 hover:text-inherit transition-colors cursor-pointer"
               title="Minimize Output Panel"
             >
               <Minus className="w-3.5 h-3.5" />
@@ -522,7 +577,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
           {onToggleMaximize && (
             <button
               onClick={onToggleMaximize}
-              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-black/20 text-slate-400 hover:text-inherit transition-colors cursor-pointer"
               title={isMaximized ? "Restore Panel Size" : "Maximize Output Panel"}
             >
               {isMaximized ? <Minimize2 className="w-3.5 h-3.5 text-indigo-400" /> : <Maximize2 className="w-3.5 h-3.5" />}
@@ -546,11 +601,11 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
       <div className="flex-1 overflow-hidden relative">
         {/* Output Console Tab */}
         {activeTab === 'console' && (
-          <div className="h-full flex flex-col font-mono text-xs bg-slate-950">
+          <div className={`h-full flex flex-col font-mono text-xs ${tConfig.containerBg}`}>
             {/* Filter Pills & Execution Status Banner */}
-            <div className="px-3 py-1.5 bg-slate-900/60 border-b border-slate-800/80 flex items-center justify-between text-[11px] select-none shrink-0 flex-wrap gap-2">
+            <div className={`px-3 py-1.5 ${tConfig.filterBarBg} border-b ${tConfig.borderColor} flex items-center justify-between text-[11px] select-none shrink-0 flex-wrap gap-2`}>
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-500 font-semibold">Filter:</span>
+                <span className={`${tConfig.dimTextColor} font-semibold`}>Filter:</span>
                 <button
                   onClick={() => setFilterType('all')}
                   className={`px-2 py-0.5 rounded cursor-pointer ${
@@ -580,26 +635,26 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
               {executionResult && (
                 <div className="text-[11px] flex items-center gap-2 flex-wrap">
                   {executionResult.executionEngine && (
-                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                    <span className={`px-2 py-0.5 rounded-full bg-black/30 ${tConfig.dimTextColor} font-mono text-[10px] border ${tConfig.borderColor}`}>
                       ⚡ {executionResult.executionEngine}
                     </span>
                   )}
 
                   {executionResult.status === 'success' ? (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/30 flex items-center gap-1">
+                    <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] border flex items-center gap-1 ${tConfig.statusBadgeSuccess}`}>
                       <Check className="w-3 h-3" />
                       Exit 0 (Success)
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-bold text-[10px] border border-red-500/30 flex items-center gap-1">
+                    <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] border flex items-center gap-1 ${tConfig.statusBadgeError}`}>
                       <AlertCircle className="w-3 h-3" />
                       {executionResult.compilerOutput ? 'Compilation Error' : `Exit ${executionResult.exitCode ?? 1} (Error)`}
                     </span>
                   )}
 
-                  <span className="text-slate-400">⏱️ {executionResult.executionTimeMs}ms</span>
+                  <span className={tConfig.dimTextColor}>⏱️ {executionResult.executionTimeMs}ms</span>
                   {executionResult.memoryUsedMb && (
-                    <span className="text-slate-400">💾 {executionResult.memoryUsedMb}MB</span>
+                    <span className={tConfig.dimTextColor}>💾 {executionResult.memoryUsedMb}MB</span>
                   )}
                 </div>
               )}
@@ -607,36 +662,56 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
 
             {/* Scrollable Logs Body */}
             <div 
-              className="flex-1 overflow-y-auto p-3 space-y-1.5 custom-scrollbar"
+              className={`flex-1 overflow-y-auto p-3 space-y-1.5 custom-scrollbar ${tConfig.containerBg}`}
               style={{ fontSize: `${consoleSettings.fontSize}px` }}
             >
-              {filteredLogs.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2 py-12">
-                  <TerminalIcon className="w-8 h-8 text-slate-700" />
+              {filteredLogs.length === 0 && replHistory.length === 0 ? (
+                <div className={`h-full flex flex-col items-center justify-center ${tConfig.dimTextColor} space-y-2 py-12`}>
+                  <TerminalIcon className="w-8 h-8 opacity-40" />
                   <p className="text-xs">No output yet. Click &quot;Run Code&quot; (Shift+Enter) to execute.</p>
                 </div>
               ) : (
-                filteredLogs.map((log) => (
-                  <LogItem 
-                    key={log.id} 
-                    log={log} 
-                    lineWrap={consoleSettings.lineWrap}
-                    showTimestamp={consoleSettings.showTimestamps}
-                  />
-                ))
+                <>
+                  {filteredLogs.map((log) => (
+                    <LogItem 
+                      key={log.id} 
+                      log={log} 
+                      lineWrap={consoleSettings.lineWrap}
+                      showTimestamp={consoleSettings.showTimestamps}
+                      tConfig={tConfig}
+                    />
+                  ))}
+
+                  {replHistory.length > 0 && (
+                    <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
+                      <div className={`text-[10px] uppercase font-bold tracking-wider ${tConfig.dimTextColor}`}>REPL Evaluations</div>
+                      {replHistory.map((item, idx) => (
+                        <div key={idx} className={`p-2 rounded-lg border space-y-1 font-mono text-xs ${tConfig.logDefault} ${tConfig.borderColor}`}>
+                          <div className="flex items-center gap-1.5 text-indigo-400 font-semibold">
+                            <span>&gt;</span>
+                            <AnsiText text={item.input} />
+                          </div>
+                          <div className={`pl-3.5 ${item.isError ? 'text-rose-400' : 'text-emerald-400'} whitespace-pre-wrap`}>
+                            <AnsiText text={item.output} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
               <div ref={consoleBottomRef} />
             </div>
 
             {/* Interactive REPL Prompt */}
-            <form onSubmit={handleReplSubmit} className="border-t border-slate-800 bg-slate-900/90 p-2 flex items-center gap-2 shrink-0">
-              <span className="text-indigo-400 font-mono text-xs pl-1">&gt;</span>
+            <form onSubmit={handleReplSubmit} className={`border-t ${tConfig.borderColor} ${tConfig.replBg} p-2 flex items-center gap-2 shrink-0`}>
+              <span className="font-mono text-xs pl-1" style={{ color: tConfig.preview.prompt }}>&gt;</span>
               <input
                 type="text"
                 value={replInput}
                 onChange={(e) => setReplInput(e.target.value)}
                 placeholder="Evaluate live expression or test statement..."
-                className="flex-1 bg-transparent text-slate-100 placeholder-slate-600 focus:outline-none font-mono text-xs"
+                className={`flex-1 bg-transparent ${tConfig.textColor} placeholder-slate-500 focus:outline-none font-mono text-xs`}
               />
               <button
                 type="submit"
@@ -789,9 +864,9 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
                         {currentTestCase.status === 'passed' ? '✓ Passed' : '✗ Output Mismatch'}
                       </span>
                     </div>
-                    <pre className="text-xs font-mono text-slate-200 whitespace-pre-wrap">
-                      {currentTestCase.actualOutput || '(empty output)'}
-                    </pre>
+                    <div className="text-xs font-mono text-slate-200 whitespace-pre-wrap">
+                      <AnsiText text={currentTestCase.actualOutput || '(empty output)'} />
+                    </div>
                   </div>
                 )}
               </div>
@@ -843,8 +918,23 @@ const LogItem: React.FC<{
   log: ConsoleLogEntry; 
   lineWrap?: boolean; 
   showTimestamp?: boolean; 
-}> = ({ log, lineWrap = true, showTimestamp = false }) => {
+  tConfig?: TerminalThemeDefinition;
+}> = ({ log, lineWrap = true, showTimestamp = false, tConfig }) => {
   const getLogStyle = () => {
+    if (tConfig) {
+      switch (log.type) {
+        case 'error':
+          return tConfig.logError;
+        case 'warn':
+          return tConfig.logWarn;
+        case 'info':
+          return tConfig.logInfo;
+        case 'stdin':
+          return tConfig.logStdin;
+        default:
+          return tConfig.logDefault;
+      }
+    }
     switch (log.type) {
       case 'error':
         return 'text-red-300 bg-red-950/30 border-red-900/40';
@@ -872,7 +962,14 @@ const LogItem: React.FC<{
       case 'chart':
         return <BarChart3 className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />;
       default:
-        return <span className="text-slate-600 select-none text-[10px]">&gt;</span>;
+        return (
+          <span 
+            className="select-none text-[10px] font-bold" 
+            style={{ color: tConfig ? tConfig.preview.prompt : '#64748b' }}
+          >
+            &gt;
+          </span>
+        );
     }
   };
 
@@ -883,7 +980,7 @@ const LogItem: React.FC<{
       <div className="flex items-start gap-2">
         {getIcon()}
         {showTimestamp && (
-          <span className="text-[10px] text-slate-500 font-mono shrink-0 select-none">
+          <span className={`text-[10px] ${tConfig?.dimTextColor || 'text-slate-500'} font-mono shrink-0 select-none`}>
             [{formattedTime}]
           </span>
         )}
@@ -891,12 +988,16 @@ const LogItem: React.FC<{
           {log.args.map((arg, idx) => {
             if (typeof arg === 'object' && arg !== null) {
               return (
-                <span key={idx} className="text-cyan-300">
+                <span key={idx} className="opacity-90 underline-offset-2">
                   {JSON.stringify(arg, null, 2)}{' '}
                 </span>
               );
             }
-            return <span key={idx}>{String(arg)} </span>;
+            return (
+              <React.Fragment key={idx}>
+                <AnsiText text={String(arg)} />{' '}
+              </React.Fragment>
+            );
           })}
         </div>
       </div>

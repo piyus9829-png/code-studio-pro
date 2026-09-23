@@ -82,10 +82,37 @@ const JAVA_TYPES = new Set([
   'Set', 'HashSet', 'Collections', 'Math', 'StringBuilder', 'StringBuffer'
 ]);
 
+// In-memory LRU cache for tokenized lines to guarantee 60fps smoothness and instant re-renders
+const lineTokenCache = new Map<string, Token[]>();
+const MAX_LINE_CACHE = 4000;
+
+function getCachedLineTokens(key: string): Token[] | undefined {
+  return lineTokenCache.get(key);
+}
+
+function setCachedLineTokens(key: string, tokens: Token[]): void {
+  if (lineTokenCache.size >= MAX_LINE_CACHE) {
+    const firstKey = lineTokenCache.keys().next().value;
+    if (firstKey) lineTokenCache.delete(firstKey);
+  }
+  lineTokenCache.set(key, tokens);
+}
+
 /**
  * Tokenizes a single line of source code with bracket matching & colorization
  */
 export function tokenizeLine(line: string, language: Language, bracketDepth = 0): Token[] {
+  // Fast path for empty lines
+  if (line.length === 0) {
+    return [{ type: 'text', value: '' }];
+  }
+
+  const cacheKey = `${language}:${bracketDepth}:${line}`;
+  const cached = getCachedLineTokens(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const tokens: Token[] = [];
   let i = 0;
   const len = line.length;
@@ -93,8 +120,9 @@ export function tokenizeLine(line: string, language: Language, bracketDepth = 0)
 
   // Preprocessor directives in C/C++ (e.g. #include <iostream>, #define MAX 100)
   if ((language === 'c' || language === 'cpp') && line.trim().startsWith('#')) {
-    tokens.push({ type: 'preprocessor', value: line });
-    return tokens;
+    const preprocessorTokens: Token[] = [{ type: 'preprocessor', value: line }];
+    setCachedLineTokens(cacheKey, preprocessorTokens);
+    return preprocessorTokens;
   }
 
   while (i < len) {
@@ -225,13 +253,67 @@ export function tokenizeLine(line: string, language: Language, bracketDepth = 0)
     i++;
   }
 
+  setCachedLineTokens(cacheKey, tokens);
   return tokens;
+}
+
+export function isLightTheme(theme?: EditorTheme | string): boolean {
+  return theme === 'github-light';
+}
+
+export function getThemeBgHex(theme?: EditorTheme | string): string {
+  switch (theme) {
+    case 'tokyo-night': return '#1a1b26';
+    case 'dracula': return '#282a36';
+    case 'monokai': return '#272822';
+    case 'synthwave': return '#241b2f';
+    case 'one-dark': return '#1e1e1e';
+    case 'github-light': return '#ffffff';
+    case 'vs-dark':
+    default: return '#020617';
+  }
 }
 
 /**
  * Returns Tailwind class for token type
  */
-export function getTokenClassName(type: Token['type'], theme: EditorTheme = 'vs-dark'): string {
+export function getTokenClassName(type: Token['type'], theme?: EditorTheme | string): string {
+  const isLight = isLightTheme(theme);
+
+  if (isLight) {
+    switch (type) {
+      case 'preprocessor':
+        return 'text-amber-700 font-semibold';
+      case 'keyword':
+        return 'text-purple-700 font-bold';
+      case 'string':
+        return 'text-emerald-700 font-medium';
+      case 'number':
+        return 'text-blue-700 font-medium';
+      case 'comment':
+        return 'text-slate-400 italic';
+      case 'function':
+        return 'text-indigo-600 font-semibold';
+      case 'type':
+        return 'text-amber-800 font-semibold';
+      case 'tag':
+        return 'text-rose-600 font-semibold';
+      case 'operator':
+        return 'text-indigo-800 font-medium';
+      case 'punctuation':
+        return 'text-slate-600';
+      case 'bracket-1':
+        return 'text-amber-700 font-bold';
+      case 'bracket-2':
+        return 'text-purple-700 font-bold';
+      case 'bracket-3':
+        return 'text-blue-700 font-bold';
+      case 'text':
+      default:
+        return 'text-slate-900';
+    }
+  }
+
   switch (type) {
     case 'preprocessor':
       return 'text-amber-400 font-semibold';

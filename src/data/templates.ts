@@ -926,5 +926,329 @@ if __name__ == '__main__':
       }
     ],
   },
+  {
+    id: 'android-admob-banner-suite',
+    name: 'Android Google AdMob Banner Ad Integration',
+    description: 'Complete Android Studio configuration for Google Mobile Ads SDK with AndroidManifest, build.gradle, XML Layout, and Java/Kotlin Activities.',
+    category: 'Mobile & Frameworks',
+    icon: 'Terminal',
+    defaultTab: 'console',
+    activeFileName: 'MainActivity.java',
+    files: [
+      {
+        name: 'AndroidManifest.xml',
+        language: 'xml',
+        content: `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.admobapp">
+
+    <!-- Required Permissions for Google Mobile Ads SDK -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AdMobApp">
+
+        <!-- Google AdMob App ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-9627971310811400~8330683019" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+</manifest>
+`,
+      },
+      {
+        name: 'build.gradle',
+        language: 'groovy',
+        content: `plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
+}
+
+android {
+    namespace 'com.example.admobapp'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.admobapp"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+    // Google Mobile Ads SDK (AdMob)
+    implementation 'com.google.android.gms:play-services-ads:23.6.0'
+}
+`,
+      },
+      {
+        name: 'activity_main.xml',
+        language: 'xml',
+        content: `<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:ads="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F172A"
+    tools:context=".MainActivity">
+
+    <!-- App Content Header -->
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Google AdMob Integration"
+        android:textColor="#F8FAFC"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginTop="48dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Initializing AdMob Mobile Ads SDK..."
+        android:textColor="#94A3B8"
+        android:textSize="14sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle" />
+
+    <!-- Google AdMob Banner AdView -->
+    <com.google.android.gms.ads.AdView
+        android:id="@+id/adView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        ads:adSize="BANNER"
+        ads:adUnitId="ca-app-pub-9627971310811400/9556134773"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+`,
+      },
+      {
+        name: 'MainActivity.java',
+        language: 'java',
+        content: `package com.example.admobapp;
+
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.gms.ads.AdListener;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.LoadAdError;
+import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.ads.initialization.InitializationStatus;
+import com.google.android.gms.ads.initialization.OnInitializationCompleteListener;
+
+public class MainActivity extends AppCompatActivity {
+
+    private static final String TAG = "AdMobDemo";
+    private AdView mAdView;
+    private TextView tvStatus;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        tvStatus = findViewById(R.id.tvStatus);
+        mAdView = findViewById(R.id.adView);
+
+        // 1. Initialize the Google Mobile Ads SDK
+        MobileAds.initialize(this, new OnInitializationCompleteListener() {
+            @Override
+            public void onInitializationComplete(@NonNull InitializationStatus initializationStatus) {
+                Log.d(TAG, "AdMob SDK Initialized successfully");
+                runOnUiThread(() -> tvStatus.setText("AdMob Initialized. Loading Banner..."));
+
+                // 2. Load Banner Ad after initialization
+                loadBannerAd();
+            }
+        });
+    }
+
+    private void loadBannerAd() {
+        // Create an AdRequest
+        AdRequest adRequest = new AdRequest.Builder().build();
+
+        // Setup Ad Lifecycle Callbacks
+        mAdView.setAdListener(new AdListener() {
+            @Override
+            public void onAdLoaded() {
+                Log.d(TAG, "Banner Ad loaded successfully!");
+                tvStatus.setText("Banner Ad is Live!");
+            }
+
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                Log.e(TAG, "Banner Ad failed to load: " + loadAdError.getMessage());
+                tvStatus.setText("Ad Load Failed (Code " + loadAdError.getCode() + "): " + loadAdError.getMessage());
+            }
+
+            @Override
+            public void onAdOpened() {
+                Log.d(TAG, "Banner Ad opened/clicked.");
+            }
+
+            @Override
+            public void onAdClosed() {
+                Log.d(TAG, "Banner Ad closed.");
+            }
+        });
+
+        // Request the ad
+        mAdView.loadAd(adRequest);
+    }
+
+    @Override
+    protected void onPause() {
+        if (mAdView != null) {
+            mAdView.pause();
+        }
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mAdView != null) {
+            mAdView.resume();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mAdView != null) {
+            mAdView.destroy();
+        }
+        super.onDestroy();
+    }
+}
+`,
+      },
+      {
+        name: 'MainActivity.kt',
+        language: 'kotlin',
+        content: `package com.example.admobapp
+
+import android.os.Bundle
+import android.util.Log
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.gms.ads.AdListener
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.MobileAds
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var adView: AdView
+    private lateinit var tvStatus: TextView
+    private val TAG = "AdMobKotlin"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        tvStatus = findViewById(R.id.tvStatus)
+        adView = findViewById(R.id.adView)
+
+        // 1. Initialize Google Mobile Ads SDK
+        MobileAds.initialize(this) { status ->
+            Log.d(TAG, "AdMob SDK Initialized: $status")
+            runOnUiThread { tvStatus.text = "SDK Initialized. Loading Ad..." }
+            loadBanner()
+        }
+    }
+
+    private fun loadBanner() {
+        val adRequest = AdRequest.Builder().build()
+        adView.adListener = object : AdListener() {
+            override fun onAdLoaded() {
+                Log.d(TAG, "Banner Ad Loaded successfully.")
+                tvStatus.text = "Banner Ad Active"
+            }
+
+            override fun onAdFailedToLoad(error: LoadAdError) {
+                Log.e(TAG, "Banner Ad Failed: \${error.message}")
+                tvStatus.text = "Error \${error.code}: \${error.message}"
+            }
+        }
+        adView.loadAd(adRequest)
+    }
+
+    override fun onPause() {
+        adView.pause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        adView.resume()
+    }
+
+    override fun onDestroy() {
+        adView.destroy()
+        super.onDestroy()
+    }
+}
+`,
+      }
+    ],
+  },
 ];
 
