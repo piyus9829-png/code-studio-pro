@@ -50,8 +50,13 @@ export const firebaseConfig = {
   oAuthClientId: metaEnv.VITE_FIREBASE_OAUTH_CLIENT_ID || procEnv.VITE_FIREBASE_OAUTH_CLIENT_ID || "251866514942-lltgaann6vq1623t9nucc05b39al9v98.apps.googleusercontent.com"
 };
 
-// Initialize Firebase App instance safely
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Safe initialization of Firebase App instance
+const effectiveConfig = {
+  ...firebaseConfig,
+  apiKey: firebaseConfig.apiKey || "mock-public-config-unconfigured"
+};
+
+const app = !getApps().length ? initializeApp(effectiveConfig) : getApp();
 
 export const auth = getAuth(app);
 

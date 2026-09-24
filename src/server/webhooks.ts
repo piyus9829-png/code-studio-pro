@@ -102,9 +102,9 @@ async function executeDatabaseSync(item: PaymentWebhookPayload) {
 export function verifyRazorpaySignature(
   rawBody: string | Buffer,
   signature: string,
-  secret: string = process.env.RAZORPAY_WEBHOOK_SECRET || "rzp_webhook_secret_dev_demo"
+  secret: string = process.env.RAZORPAY_WEBHOOK_SECRET || ""
 ): boolean {
-  if (!signature || !rawBody) return false;
+  if (!signature || !rawBody || !secret) return false;
   try {
     const expectedSignature = crypto
       .createHmac("sha256", secret)
@@ -126,9 +126,9 @@ export function verifyRazorpaySignature(
 export function verifyStripeSignature(
   rawBody: string | Buffer,
   signatureHeader: string,
-  secret: string = process.env.STRIPE_WEBHOOK_SECRET || "whsec_stripe_demo_secret"
+  secret: string = process.env.STRIPE_WEBHOOK_SECRET || ""
 ): boolean {
-  if (!signatureHeader || !rawBody) return false;
+  if (!signatureHeader || !rawBody || !secret) return false;
   try {
     const parts = signatureHeader.split(",");
     let timestamp = "";
@@ -205,7 +205,7 @@ export async function createUpiIntent(req: Request, res: Response) {
     }
 
     // Try creating Razorpay UPI order if live key configured
-    const keyId = process.env.RAZORPAY_KEY_ID || "rzp_test_1DP5mmOlF5G5ag";
+    const keyId = process.env.RAZORPAY_KEY_ID || "";
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
     if (keySecret && process.env.RAZORPAY_KEY_ID) {
@@ -262,7 +262,7 @@ export async function createPaymentOrder(req: Request, res: Response) {
   try {
     const { plan = "pro_annual", amount, currency = "INR", userId, userEmail, method = "upi", provider = "gpay" } = req.body;
     
-    const keyId = process.env.RAZORPAY_KEY_ID || "rzp_test_1DP5mmOlF5G5ag";
+    const keyId = process.env.RAZORPAY_KEY_ID || "";
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     
     // Calculate numeric amount in smallest currency unit (e.g. paise or cents)
@@ -459,8 +459,8 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
   const signature = req.headers["x-razorpay-signature"] as string;
   const rawBody = (req as any).rawBody || JSON.stringify(req.body);
 
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || "rzp_webhook_secret_dev_demo";
-  const isValid = signature ? verifyRazorpaySignature(rawBody, signature, webhookSecret) : true;
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || "";
+  const isValid = signature && webhookSecret ? verifyRazorpaySignature(rawBody, signature, webhookSecret) : true;
 
   if (!isValid && process.env.NODE_ENV === "production" && process.env.RAZORPAY_WEBHOOK_SECRET) {
     console.warn("[Razorpay Webhook] Invalid HMAC signature rejection");
@@ -505,8 +505,8 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   const signature = req.headers["stripe-signature"] as string;
   const rawBody = (req as any).rawBody || JSON.stringify(req.body);
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "whsec_stripe_demo_secret";
-  const isValid = signature ? verifyStripeSignature(rawBody, signature, webhookSecret) : true;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
+  const isValid = signature && webhookSecret ? verifyStripeSignature(rawBody, signature, webhookSecret) : true;
 
   if (!isValid && process.env.NODE_ENV === "production" && process.env.STRIPE_WEBHOOK_SECRET) {
     console.warn("[Stripe Webhook] Invalid signature rejection");
