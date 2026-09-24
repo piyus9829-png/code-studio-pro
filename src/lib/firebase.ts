@@ -34,7 +34,21 @@ import {
   addDoc,
   deleteDoc
 } from "firebase/firestore";
-import firebaseConfig from "../../firebase-applet-config.json";
+// Firebase configuration is read securely from environment variables (VITE_FIREBASE_*)
+// to avoid exposing credentials or committing public API keys in JSON metadata files.
+const metaEnv = typeof import.meta !== "undefined" ? (import.meta as any).env || {} : {};
+const procEnv = typeof process !== "undefined" ? process.env || {} : {};
+
+export const firebaseConfig = {
+  apiKey: metaEnv.VITE_FIREBASE_API_KEY || procEnv.VITE_FIREBASE_API_KEY || "",
+  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || procEnv.VITE_FIREBASE_AUTH_DOMAIN || "mystic-yolk-bcbh2.firebaseapp.com",
+  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || procEnv.VITE_FIREBASE_PROJECT_ID || "mystic-yolk-bcbh2",
+  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || procEnv.VITE_FIREBASE_STORAGE_BUCKET || "mystic-yolk-bcbh2.firebasestorage.app",
+  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || procEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "251866514942",
+  appId: metaEnv.VITE_FIREBASE_APP_ID || procEnv.VITE_FIREBASE_APP_ID || "1:251866514942:web:6bb9b7d2d3ed71f702acaf",
+  firestoreDatabaseId: metaEnv.VITE_FIREBASE_FIRESTORE_DATABASE_ID || procEnv.VITE_FIREBASE_FIRESTORE_DATABASE_ID || "ai-studio-clouddevelopment-2c301c9e-7e7d-4d4c-b6df-3f21cfb35a0c",
+  oAuthClientId: metaEnv.VITE_FIREBASE_OAUTH_CLIENT_ID || procEnv.VITE_FIREBASE_OAUTH_CLIENT_ID || "251866514942-lltgaann6vq1623t9nucc05b39al9v98.apps.googleusercontent.com"
+};
 
 // Initialize Firebase App instance safely
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
