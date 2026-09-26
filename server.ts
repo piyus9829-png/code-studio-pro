@@ -1538,6 +1538,15 @@ Be concise, direct, helpful, and technically precise.`;
     }
   });
 
+  // Serve ads.txt for Google AdSense verification
+  app.get("/ads.txt", (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    const adsTxtPath = path.join(process.cwd(), "public", "ads.txt");
+    res.sendFile(adsTxtPath);
+  });
+
   // Serve PWA Manifest with explicit CORS and MIME headers for PWABuilder
   app.get(["/manifest.json", "/manifest.webmanifest"], (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
